@@ -1,34 +1,25 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { FileUpload } from './components/FileUpload'
+import { ScoreViewer } from './components/ScoreViewer'
+import { PageNav } from './components/PageNav'
+import { useScoreStore } from './store/scoreStore'
 
 function App() {
-  const [count, setCount] = useState(0)
+  const fileName = useScoreStore((s) => s.fileName)
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
+    <div className="min-h-screen bg-white flex flex-col">
+      <header className="border-b bg-nota-100 border-nota-200 px-6 py-3 flex items-center justify-between">
+        <h1 className="text-xl font-semibold text-nota-900">Nota</h1>
+        <FileUpload />
+      </header>
+      <main className="flex-1 flex flex-col items-center p-4">
+        {fileName && (
+          <p className="text-sm text-gray-500 mb-2">{fileName}</p>
+        )}
+        <ScoreViewer />
+        <PageNav />
+      </main>
+    </div>
   )
 }
 
