@@ -8,7 +8,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-white flex flex-col">
-      <header className="border-b bg-nota-100 border-nota-200 px-6 py-3 flex items-center justify-between">
+      <header className="bg-nota-200 px-6 py-3 flex items-center justify-between shadow">
         <h1 className="text-xl font-semibold text-nota-900">Nota</h1>
         <FileUpload />
       </header>
