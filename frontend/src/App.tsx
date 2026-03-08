@@ -1,24 +1,23 @@
-import { FileUpload } from './components/FileUpload'
+import { Header } from './components/Header'
+import { Dashboard } from './components/Dashboard'
 import { ScoreViewer } from './components/ScoreViewer'
 import { PageNav } from './components/PageNav'
 import { useScoreStore } from './store/scoreStore'
 
 function App() {
-  const fileName = useScoreStore((s) => s.fileName)
+  const musicxml = useScoreStore((s) => s.musicxml)
 
   return (
     <div className="min-h-screen bg-white flex flex-col">
-      <header className="bg-nota-200 px-6 py-3 flex items-center justify-between shadow">
-        <h1 className="text-xl font-semibold text-nota-900">Nota</h1>
-        <FileUpload />
-      </header>
-      <main className="flex-1 flex flex-col items-center p-4">
-        {fileName && (
-          <p className="text-sm text-gray-500 mb-2">{fileName}</p>
-        )}
-        <ScoreViewer />
-        <PageNav />
-      </main>
+      <Header />
+      {musicxml ? (
+        <main className="flex-1 flex flex-col items-center p-4">
+          <ScoreViewer />
+          <PageNav />
+        </main>
+      ) : (
+        <Dashboard />
+      )}
     </div>
   )
 }
