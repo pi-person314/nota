@@ -41,7 +41,7 @@ export function Dashboard() {
         {/* title row */}
         <div className="flex items-start justify-between mb-6">
           <div>
-            <h1 className="text-3xl font-bold text-nota-950">My Scores</h1>
+            <h1 className="text-3xl font-bold text-nota-950">Dashboard</h1>
             <p className="text-sm text-gray-500 mt-1">{filteredScores.length} scores</p>
           </div>
           <label className="cursor-pointer inline-flex items-center gap-2 px-6 py-3 bg-nota-900 text-white rounded-full hover:bg-nota-700 transition-colors shadow font-medium">

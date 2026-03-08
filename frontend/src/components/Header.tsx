@@ -1,23 +1,10 @@
 export function Header() {
   return (
-    <header className="bg-nota-950 px-6 py-4 flex items-center justify-between shadow">
+    <header className="bg-nota-900 px-6 py-4 flex items-center justify-between shadow">
       <div className="flex items-center gap-2">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="24"
-          height="24"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="text-nota-300"
-        >
-          <path d="M9 18V5l12-2v13" />
-          <circle cx="6" cy="18" r="3" />
-          <circle cx="18" cy="16" r="3" />
-        </svg>
+        <div className="h-8 w-6 overflow-hidden flex items-center justify-center">
+          <img src="/nota.png" alt="Nota" className="h-8 max-w-none" />
+        </div>
         <span className="text-white text-lg font-bold">Nota</span>
       </div>
       <div className="flex items-center gap-4">
