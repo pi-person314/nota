@@ -1,61 +1,197 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useScoreStore, scoreMeta, type Score } from '../store/scoreStore'
+import { relativeTime } from '../lib/time'
+import { downloadScore } from '../lib/download'
+import { Thumbnail } from './Thumbnail'
+import { ConfirmDialog } from './ConfirmDialog'
 
-interface ScoreCardProps {
-  title: string
-  opened: string
-  modified: string
-  starred?: boolean
-}
+export function ScoreCard({ score, delay = 0 }: { score: Score; delay?: number }) {
+  const toggleStar = useScoreStore((s) => s.toggleStar)
+  const updateScore = useScoreStore((s) => s.updateScore)
+  const removeScore = useScoreStore((s) => s.removeScore)
+  const markOpened = useScoreStore((s) => s.markOpened)
+  const navigate = useNavigate()
 
-export function ScoreCard({ title, opened, modified, starred = false }: ScoreCardProps) {
-  const [isStarred, setIsStarred] = useState(starred)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [confirming, setConfirming] = useState(false)
+  const [renaming, setRenaming] = useState(false)
+  const [draftTitle, setDraftTitle] = useState(score.title)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!menuOpen) return
+    const onClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onClick)
+    return () => document.removeEventListener('mousedown', onClick)
+  }, [menuOpen])
+
+  if (score.pending) {
+    return (
+      <div className="skeleton-pulse rise overflow-hidden rounded-card border border-line bg-card" style={{ animationDelay: `${delay}ms` }}>
+        <div className="h-32 border-b border-line-faint bg-mist" />
+        <div className="p-5">
+          <div className="h-4 w-2/3 rounded-input bg-mist" />
+          <div className="mt-2.5 h-3 w-1/2 rounded-input bg-mist" />
+        </div>
+      </div>
+    )
+  }
+
+  const commitRename = () => {
+    const title = draftTitle.trim()
+    if (title && title !== score.title) {
+      updateScore(score.id, { title, modifiedAt: Date.now() })
+    } else {
+      setDraftTitle(score.title)
+    }
+    setRenaming(false)
+  }
+
+  const open = () => {
+    if (renaming) return
+    markOpened(score.id)
+    navigate(`/score/${score.id}`)
+  }
 
   return (
-    <div className="border border-nota-200 rounded-xl p-5 bg-white hover:shadow-md transition-shadow cursor-pointer">
-      <div className="flex items-start justify-between mb-4">
-        <div className="w-10 h-10 bg-nota-100 rounded-lg flex items-center justify-center">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="text-nota-700"
-          >
-            <path d="M9 18V5l12-2v13" />
-            <circle cx="6" cy="18" r="3" />
-            <circle cx="18" cy="16" r="3" />
-          </svg>
+    <div
+      className="rise group cursor-pointer overflow-hidden rounded-card border border-line bg-card transition-shadow hover:shadow-bloom"
+      style={{ animationDelay: `${delay}ms` }}
+      onClick={open}
+      role="link"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') open()
+      }}
+    >
+      <Thumbnail
+        svg={score.thumbnail}
+        caption="verovio thumbnail"
+        className="h-32 gap-3 border-b border-line-faint px-5 py-4.5"
+      />
+      <div className="px-5 pb-4 pt-3.5">
+        <div className="flex items-start justify-between gap-2.5">
+          {renaming ? (
+            <input
+              autoFocus
+              value={draftTitle}
+              onChange={(e) => setDraftTitle(e.target.value)}
+              onBlur={commitRename}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') commitRename()
+                if (e.key === 'Escape') {
+                  setDraftTitle(score.title)
+                  setRenaming(false)
+                }
+              }}
+              onClick={(e) => e.stopPropagation()}
+              className="nota-input w-full rounded-input border border-line-strong bg-card font-display text-[17px] leading-tight text-ink"
+            />
+          ) : (
+            <div className="font-display text-[17px] leading-tight text-ink">{score.title}</div>
+          )}
+          <div className="flex items-center gap-1.5">
+            <div className="relative" ref={menuRef}>
+              <button
+                aria-label={`Actions for ${score.title}`}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setMenuOpen((o) => !o)
+                }}
+                className={`cursor-pointer border-none bg-transparent p-0 px-1 text-[15px] leading-none text-faint transition-opacity hover:text-ink ${
+                  menuOpen ? '' : 'opacity-0 group-hover:opacity-100'
+                }`}
+              >
+                ⋯
+              </button>
+              {menuOpen && (
+                <div
+                  role="menu"
+                  className="absolute right-0 top-6 z-20 w-48 rounded-card border border-line bg-card py-1.5 shadow-bloom"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <CardMenuItem
+                    label="Rename"
+                    onClick={() => {
+                      setMenuOpen(false)
+                      setDraftTitle(score.title)
+                      setRenaming(true)
+                    }}
+                  />
+                  <CardMenuItem
+                    label="Download MusicXML"
+                    disabled={!score.data}
+                    onClick={() => {
+                      setMenuOpen(false)
+                      downloadScore(score)
+                    }}
+                  />
+                  <div className="mx-4 my-1 h-px bg-line-faint" />
+                  <CardMenuItem
+                    label="Delete"
+                    onClick={() => {
+                      setMenuOpen(false)
+                      setConfirming(true)
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+            <button
+              aria-label={score.starred ? 'Unstar' : 'Star'}
+              aria-pressed={score.starred}
+              onClick={(e) => {
+                e.stopPropagation()
+                toggleStar(score.id)
+              }}
+              className={`cursor-pointer border-none bg-transparent p-0 text-[15px] leading-none ${
+                score.starred ? 'text-brass' : 'text-line-strong hover:text-ghost'
+              }`}
+            >
+              ★
+            </button>
+          </div>
         </div>
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            setIsStarred(!isStarred)
-          }}
-          className="text-nota-700 hover:text-nota-900 transition-colors"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill={isStarred ? 'currentColor' : 'none'}
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-          </svg>
-        </button>
+        <div className="mt-1.5 flex items-baseline justify-between">
+          <div className="text-[12.5px] text-faint">
+            {scoreMeta(score, relativeTime(score.openedAt))}
+          </div>
+          <div className="font-mono text-[11px] text-ghost">{score.marks} marks</div>
+        </div>
       </div>
-      <h3 className="font-semibold text-nota-950 mb-2">{title}</h3>
-      <p className="text-sm text-gray-500">Opened: {opened}</p>
-      <p className="text-sm text-gray-500">Modified: {modified}</p>
+      {confirming && (
+        <ConfirmDialog
+          title={`Delete “${score.title}”?`}
+          body="This takes it off your stand for good. Marks and the file go with it."
+          confirmLabel="Delete"
+          onConfirm={() => removeScore(score.id)}
+          onCancel={() => setConfirming(false)}
+        />
+      )}
     </div>
+  )
+}
+
+function CardMenuItem({
+  label,
+  onClick,
+  disabled = false,
+}: {
+  label: string
+  onClick: () => void
+  disabled?: boolean
+}) {
+  return (
+    <button
+      role="menuitem"
+      disabled={disabled}
+      onClick={onClick}
+      className="block w-full cursor-pointer border-none bg-transparent px-4 py-2 text-left font-sans text-[13.5px] text-ink hover:bg-mist disabled:cursor-default disabled:text-ghost disabled:hover:bg-transparent"
+    >
+      {label}
+    </button>
   )
 }

@@ -1,15 +1,237 @@
 @import "tailwindcss";
 
-@theme {
-  --color-nota-50: #f0faf4;
-  --color-nota-100: #d9f2e2;
-  --color-nota-200: #b5e5c8;
-  --color-nota-300: #82d3a5;
-  --color-nota-400: #4dba7e;
-  --color-nota-500: #2a9d63;
-  --color-nota-600: #1e7f4f;
-  --color-nota-700: #196641;
-  --color-nota-800: #175136;
-  --color-nota-900: #14432e;
-  --color-nota-950: #0a2619;
+:root {
+  --bg: #f6f2e9;
+  --bg-card: #fffdf8;
+  --bg-mist: #ede7d8;
+  --bg-tint: #edf2ea;
+  --border: #e2dbc9;
+  --border-faint: #eee8d9;
+  --border-strong: #d9d2be;
+  --ink: #22301f;
+  --ink-soft: #4e5c48;
+  --muted: #6e6a5c;
+  --faint: #8a8578;
+  --ghost: #b0a992;
+  --pine: #2f5d46;
+  --pine-deep: #1c3a2c;
+  --brass: #c99a4b;
+  --error: #b5442d;
+  --on-pine: #f6f2e9;
+  --shadow-hover-v: 0 6px 24px rgba(34, 48, 31, 0.1);
+  --shadow-sheet-v: 0 8px 32px rgba(34, 48, 31, 0.08);
+  --mic-hi: #3e7258;
+  --mic-lo: #24513b;
+}
+
+[data-theme="dark"] {
+  --bg: #171d18;
+  --bg-card: #202821;
+  --bg-mist: #242c25;
+  --bg-tint: #223027;
+  --border: #2e362d;
+  --border-faint: #29312a;
+  --border-strong: #3d473c;
+  --ink: #efead9;
+  --ink-soft: #c6c1ae;
+  --muted: #a8a390;
+  --faint: #6e7a6a;
+  --ghost: #5e695e;
+  --pine: #7fae93;
+  --pine-deep: #94c2a8;
+  --brass: #c99a4b;
+  --error: #d06a50;
+  --on-pine: #171d18;
+  --shadow-hover-v: 0 6px 24px rgba(0, 0, 0, 0.3);
+  --shadow-sheet-v: 0 8px 32px rgba(0, 0, 0, 0.3);
+  --mic-hi: #8fbea3;
+  --mic-lo: #4e7a62;
+}
+
+@theme inline {
+  --color-*: initial;
+  --color-bg: var(--bg);
+  --color-card: var(--bg-card);
+  --color-mist: var(--bg-mist);
+  --color-tint: var(--bg-tint);
+  --color-line: var(--border);
+  --color-line-faint: var(--border-faint);
+  --color-line-strong: var(--border-strong);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-ghost: var(--ghost);
+  --color-pine: var(--pine);
+  --color-pine-deep: var(--pine-deep);
+  --color-brass: var(--brass);
+  --color-error: var(--error);
+  --color-on-pine: var(--on-pine);
+
+  --font-display: "Young Serif", serif;
+  --font-sans: "Albert Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  --shadow-bloom: var(--shadow-hover-v);
+  --shadow-sheet: var(--shadow-sheet-v);
+
+  --radius-*: initial;
+  --radius-card: 6px;
+  --radius-input: 4px;
+  --radius-pill: 999px;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--bg);
+}
+
+body {
+  font-family: var(--font-sans);
+  color: var(--ink);
+}
+
+::placeholder {
+  color: var(--ghost);
+}
+
+:focus-visible {
+  outline: 2px solid var(--pine);
+  outline-offset: 2px;
+}
+
+.nota-input:focus-visible {
+  outline: none;
+  border-color: var(--pine);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--pine) 12%, transparent);
+}
+
+.score-svg svg {
+  width: 100%;
+  height: auto;
+  color: var(--ink);
+  fill: var(--ink);
+}
+.score-svg svg [fill="#000"],
+.score-svg svg [fill="#000000"],
+.score-svg svg [fill="black"] {
+  fill: currentColor;
+}
+.score-svg svg [stroke="#000"],
+.score-svg svg [stroke="#000000"],
+.score-svg svg [stroke="black"] {
+  stroke: currentColor;
+}
+
+.staff-lines {
+  height: 22px;
+  background: repeating-linear-gradient(
+    180deg,
+    var(--ghost) 0 1px,
+    transparent 1px 5.5px
+  );
+  background-size: 100% 22px;
+  background-repeat: no-repeat;
+}
+
+@keyframes nota-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.rise {
+  animation: nota-rise 400ms ease-out both;
+}
+
+@keyframes nota-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--pine) 35%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 10px transparent;
+  }
+}
+.mic-pulse {
+  animation: nota-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes nota-sweep {
+  0%,
+  20% {
+    width: 0;
+    opacity: 0;
+  }
+  35% {
+    opacity: 1;
+  }
+  70%,
+  100% {
+    width: 100%;
+    opacity: 1;
+  }
+}
+@keyframes nota-chip {
+  0%,
+  55% {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  70%,
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.demo-sweep {
+  animation: nota-sweep 4s ease-in-out infinite;
+}
+.demo-chip {
+  animation: nota-chip 4s ease-in-out infinite;
+}
+
+@keyframes nota-skeleton {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+.skeleton-pulse {
+  animation: nota-skeleton 1.6s ease-in-out infinite;
+}
+
+@keyframes nota-hairline {
+  0% {
+    left: -30%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+.upload-hairline {
+  position: relative;
+  overflow: hidden;
+  height: 2px;
+  background: var(--border-faint);
+  border-radius: 999px;
+}
+.upload-hairline::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -30%;
+  width: 30%;
+  background: var(--pine);
+  border-radius: 999px;
+  animation: nota-hairline 1.2s ease-in-out infinite;
 }

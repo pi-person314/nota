@@ -1,12 +1,14 @@
 declare module 'verovio/wasm' {
-  const createVerovioModule: () => Promise<any>
+  type VerovioModule = Record<string, unknown>
+  const createVerovioModule: () => Promise<VerovioModule>
   export default createVerovioModule
 }
 
 declare module 'verovio/esm' {
   export class VerovioToolkit {
-    constructor(module: any)
+    constructor(module: Record<string, unknown>)
     loadData(data: string): boolean
+    loadZipDataBuffer(data: ArrayBuffer): boolean
     renderToSVG(page?: number): string
     getPageCount(): number
     setOptions(options: Record<string, unknown>): void

@@ -1,30 +1,19 @@
-import { Header } from './components/Header'
-import { Dashboard } from './components/Dashboard'
-import { ScoreViewer } from './components/ScoreViewer'
-import { PageNav } from './components/PageNav'
-import { useScoreStore } from './store/scoreStore'
+import { Routes, Route, Navigate } from 'react-router-dom'
+import { Landing } from './pages/Landing'
+import { Login, Signup } from './pages/Auth'
+import { Dashboard } from './pages/Dashboard'
+import { Viewer } from './pages/Viewer'
 
 function App() {
-  const musicxml = useScoreStore((s) => s.musicxml)
-
   return (
-    <div className="min-h-screen bg-white flex flex-col">
-      <Header />
-      {musicxml ? (
-        <main className="flex-1 flex flex-col items-center p-4">
-          <button
-            onClick={() => useScoreStore.getState().clear()}
-            className="self-start mb-2 px-3 py-1.5 text-sm text-nota-700 hover:text-nota-500 flex items-center gap-1 cursor-pointer"
-          >
-            ← Return to Dashboard
-          </button>
-          <ScoreViewer />
-          <PageNav />
-        </main>
-      ) : (
-        <Dashboard />
-      )}
-    </div>
+    <Routes>
+      <Route path="/" element={<Landing />} />
+      <Route path="/login" element={<Login />} />
+      <Route path="/signup" element={<Signup />} />
+      <Route path="/dashboard" element={<Dashboard />} />
+      <Route path="/score/:id" element={<Viewer />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   )
 }
 
