@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { MicIcon } from './icons'
-
-const DEMO_PARTIAL = '“now add a diminuendo at bar thirty—”'
+import { api, ApiRequestError } from '../lib/api'
+import { useVoiceRecorder } from '../hooks/useVoiceRecorder'
 
 export interface CommandToast {
   kind: 'confirmation' | 'notice' | 'error'
@@ -16,11 +16,21 @@ interface VoiceBarProps {
   onSubmitCommand: (text: string) => void
   onUndo: () => void
   onRedo: () => void
+  onVoiceMessage: (toast: CommandToast) => void
+  // Bumped by the parent whenever a command comes back needing clarification
+  // for the first time in a row — the mic re-arms itself so the musician can
+  // answer hands-free.
+  voiceRearmToken: number
+  // Bumped by the parent when a *second* consecutive clarification arrives —
+  // guards against re-arm loops by cutting the mic and handing off to text.
+  voiceStandDownToken: number
 }
 
-// The mic / "listening" affordance below is voice UI for a later phase —
-// it stays visual-only (local toggle, no audio capture) and untouched by
-// the typed-command wiring added here.
+// Shortest transcript worth sending to the command endpoint. Anything
+// shorter is almost certainly silence or noise; the backend would just
+// bounce it with EMPTY_TRANSCRIPT, so it's handled here instead.
+const MIN_TRANSCRIPT_LENGTH = 2
+
 export function VoiceBar({
   history,
   busy,
@@ -29,28 +39,132 @@ export function VoiceBar({
   onSubmitCommand,
   onUndo,
   onRedo,
+  onVoiceMessage,
+  voiceRearmToken,
+  voiceStandDownToken,
 }: VoiceBarProps) {
-  const [listening, setListening] = useState(true)
   const [draft, setDraft] = useState('')
+  const [retryable, setRetryable] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  const handleRecordingReady = useCallback(
+    async (blob: Blob) => {
+      try {
+        const { text } = await api.transcribeAudio(blob)
+        const trimmed = text.trim()
+        if (trimmed.length < MIN_TRANSCRIPT_LENGTH) {
+          setRetryable(true)
+          onVoiceMessage({ kind: 'notice', text: 'Didn’t catch that — try again.' })
+          return
+        }
+        setRetryable(false)
+        setDraft(trimmed)
+        onSubmitCommand(trimmed)
+      } catch (err) {
+        if (err instanceof ApiRequestError && err.code === 'STT_NOT_CONFIGURED') {
+          setRetryable(false)
+          onVoiceMessage({ kind: 'notice', text: 'Voice transcription isn’t configured on this server.' })
+          inputRef.current?.focus()
+        } else if (err instanceof ApiRequestError && (err.code === 'TRANSCRIPTION_FAILED' || err.code === 'NO_AUDIO')) {
+          setRetryable(true)
+          onVoiceMessage({ kind: 'notice', text: 'Didn’t catch that — try again.' })
+        } else {
+          setRetryable(true)
+          onVoiceMessage({
+            kind: 'error',
+            text: err instanceof Error ? err.message : 'Voice transcription failed.',
+          })
+        }
+      } finally {
+        recorderRef.current.finish()
+      }
+    },
+    [onSubmitCommand, onVoiceMessage],
+  )
+
+  const recorder = useVoiceRecorder({ onRecordingReady: handleRecordingReady })
+  const recorderRef = useRef(recorder)
+  recorderRef.current = recorder
 
   useEffect(() => {
     if (clarification) inputRef.current?.focus()
   }, [clarification])
 
+  // Surface permission / support errors from the recorder through the same
+  // toast the rest of the voice pipeline uses.
+  const lastRecorderError = useRef<string | null>(null)
+  useEffect(() => {
+    if (recorder.error && recorder.error !== lastRecorderError.current) {
+      onVoiceMessage({ kind: 'error', text: recorder.error })
+    }
+    lastRecorderError.current = recorder.error
+  }, [recorder.error, onVoiceMessage])
+
+  // Auto re-arm the mic for a hands-free answer to a clarifying question —
+  // but only the first time in a row (see voiceStandDownToken below).
+  const lastRearmToken = useRef(0)
+  useEffect(() => {
+    if (voiceRearmToken !== lastRearmToken.current) {
+      lastRearmToken.current = voiceRearmToken
+      if (voiceRearmToken > 0) {
+        setRetryable(false)
+        void recorderRef.current.start()
+      }
+    }
+  }, [voiceRearmToken])
+
+  // A second consecutive clarification: stop guessing, cut the mic, and let
+  // the musician answer by typing instead.
+  const lastStandDownToken = useRef(0)
+  useEffect(() => {
+    if (voiceStandDownToken !== lastStandDownToken.current) {
+      lastStandDownToken.current = voiceStandDownToken
+      if (voiceStandDownToken > 0) {
+        recorderRef.current.cancel()
+        inputRef.current?.focus()
+      }
+    }
+  }, [voiceStandDownToken])
+
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
     const text = draft.trim()
     if (!text || busy) return
+    setRetryable(false)
     onSubmitCommand(text)
     setDraft('')
   }
+
+  const micDisabled = busy || recorder.status === 'requesting-permission' || recorder.status === 'processing'
+
+  const handleMicClick = () => {
+    if (recorder.status === 'recording') {
+      recorder.stop()
+    } else if (recorder.status === 'idle') {
+      setRetryable(false)
+      void recorder.start()
+    }
+  }
+
+  const handleRetry = () => {
+    setRetryable(false)
+    void recorder.start()
+  }
+
+  const micLabel =
+    recorder.status === 'recording'
+      ? 'Stop listening'
+      : recorder.status === 'requesting-permission'
+        ? 'Requesting microphone access'
+        : recorder.status === 'processing'
+          ? 'Transcribing'
+          : 'Start listening'
 
   return (
     <div className="border-t border-line bg-bg">
       {(clarification || toast) && (
         <div
-          className={`px-7 pt-3 font-mono text-[12.5px] ${
+          className={`flex items-center gap-3 px-7 pt-3 font-mono text-[12.5px] ${
             clarification
               ? 'text-brass'
               : toast?.kind === 'error'
@@ -60,37 +174,62 @@ export function VoiceBar({
                   : 'text-pine'
           }`}
         >
-          {clarification ? `Nota asks: “${clarification}”` : toast?.text}
+          <span>{clarification ? `Nota asks: “${clarification}”` : toast?.text}</span>
+          {!clarification && retryable && (
+            <button
+              onClick={handleRetry}
+              className="cursor-pointer whitespace-nowrap border-none bg-transparent p-0 font-mono text-[12.5px] text-pine underline hover:text-pine-deep"
+            >
+              record again
+            </button>
+          )}
         </div>
       )}
 
       <div className="flex items-center gap-4.5 px-7 pb-2.5 pt-4 max-md:flex-wrap">
         <button
-          aria-label={listening ? 'Stop listening' : 'Start listening'}
-          aria-pressed={listening}
-          onClick={() => setListening((l) => !l)}
-          className={`flex h-13 w-13 shrink-0 cursor-pointer items-center justify-center rounded-full border-none text-on-pine ${
-            listening
+          aria-label={micLabel}
+          aria-pressed={recorder.status === 'recording'}
+          onClick={handleMicClick}
+          disabled={micDisabled}
+          className={`flex h-13 w-13 shrink-0 cursor-pointer items-center justify-center rounded-full border-none text-on-pine disabled:cursor-default ${
+            recorder.status === 'recording'
               ? 'mic-pulse bg-[radial-gradient(circle_at_35%_30%,var(--mic-hi),var(--mic-lo))]'
-              : 'bg-ghost'
+              : recorder.status === 'processing' || recorder.status === 'requesting-permission'
+                ? 'bg-brass'
+                : 'bg-ghost'
           }`}
         >
           <MicIcon />
         </button>
         <div className="min-w-0 md:min-w-75">
-          {listening ? (
+          {recorder.status === 'recording' ? (
             <>
               <div className="text-[13.5px] font-semibold text-pine">Listening…</div>
-              <div className="mt-0.75 truncate font-mono text-[12.5px] italic text-ink-soft">
-                {DEMO_PARTIAL}
+              <div className="mt-0.75 flex items-center gap-2 font-mono text-[12.5px] text-ink-soft">
+                <span>tap the mic to stop and send</span>
+                <button
+                  onClick={() => recorder.cancel()}
+                  className="cursor-pointer whitespace-nowrap border-none bg-transparent p-0 text-ghost underline hover:text-error"
+                >
+                  cancel
+                </button>
               </div>
+            </>
+          ) : recorder.status === 'requesting-permission' ? (
+            <>
+              <div className="text-[13.5px] font-semibold text-brass">Requesting mic access…</div>
+              <div className="mt-0.75 font-mono text-[12.5px] text-ghost">check your browser’s permission prompt</div>
+            </>
+          ) : recorder.status === 'processing' ? (
+            <>
+              <div className="text-[13.5px] font-semibold text-brass">Transcribing…</div>
+              <div className="mt-0.75 font-mono text-[12.5px] text-ghost">sending your recording</div>
             </>
           ) : (
             <>
               <div className="text-[13.5px] font-semibold text-muted">Voice off</div>
-              <div className="mt-0.75 font-mono text-[12.5px] text-ghost">
-                tap the mic or say “Hey Nota”
-              </div>
+              <div className="mt-0.75 font-mono text-[12.5px] text-ghost">tap the mic to speak a command</div>
             </>
           )}
         </div>

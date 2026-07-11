@@ -115,6 +115,10 @@ export interface HistoryResponse {
   items: HistoryItem[]
 }
 
+export interface TranscribeResult {
+  text: string
+}
+
 export const api = {
   signup(name: string, email: string, password: string) {
     return request<User>('/auth/signup', {
@@ -177,5 +181,14 @@ export const api = {
   },
   getHistory(id: string) {
     return request<HistoryResponse>(`/scores/${id}/history`)
+  },
+
+  // `blob` is the recorded audio (webm). Sent as multipart form data so the
+  // browser sets the correct boundary in Content-Type — request() already
+  // skips the JSON header for FormData bodies.
+  transcribeAudio(blob: Blob) {
+    const form = new FormData()
+    form.append('audio', blob, 'recording.webm')
+    return request<TranscribeResult>('/transcribe', { method: 'POST', body: form })
   },
 }

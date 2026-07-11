@@ -73,6 +73,12 @@ function ViewerInner({ scoreId }: { scoreId: string }) {
   const [clarification, setClarification] = useState<string | null>(null)
   const [highlightIds, setHighlightIds] = useState<string[]>([])
   const [history, setHistory] = useState<string[]>([])
+  const [voiceRearmToken, setVoiceRearmToken] = useState(0)
+  const [voiceStandDownToken, setVoiceStandDownToken] = useState(0)
+  // Counts consecutive needs_clarification responses so the mic only
+  // re-arms itself once in a row — a second ambiguous answer in a row hands
+  // control back to the typed input rather than looping forever.
+  const clarificationStreakRef = useRef(0)
 
   const leftRef = useRef<HTMLDivElement>(null)
   const rightRef = useRef<HTMLDivElement>(null)
@@ -260,9 +266,18 @@ function ViewerInner({ scoreId }: { scoreId: string }) {
         setHighlightIds(result.changed_element_ids)
 
         if (result.needs_clarification) {
+          clarificationStreakRef.current += 1
           setClarification(result.confirmation)
           setToast(null)
+          // First clarification in a row: re-arm the mic so the musician
+          // can answer hands-free. A second one in a row: stop guessing.
+          if (clarificationStreakRef.current <= 1) {
+            setVoiceRearmToken((t) => t + 1)
+          } else {
+            setVoiceStandDownToken((t) => t + 1)
+          }
         } else {
+          clarificationStreakRef.current = 0
           setClarification(null)
           if (result.confirmation) {
             setToast({ kind: 'confirmation', text: result.confirmation })
@@ -272,6 +287,7 @@ function ViewerInner({ scoreId }: { scoreId: string }) {
           }
         }
       } catch (err) {
+        clarificationStreakRef.current = 0
         if (err instanceof ApiRequestError && err.code === 'COMMAND_IN_PROGRESS') {
           setToast({ kind: 'notice', text: 'Still working on the last command…' })
         } else if (err instanceof ApiRequestError && err.code === 'EMPTY_TRANSCRIPT') {
@@ -479,6 +495,9 @@ function ViewerInner({ scoreId }: { scoreId: string }) {
         onSubmitCommand={(text) => void handleSubmitCommand(text)}
         onUndo={() => void handleUndo()}
         onRedo={() => void handleRedo()}
+        onVoiceMessage={(t) => setToast(t)}
+        voiceRearmToken={voiceRearmToken}
+        voiceStandDownToken={voiceStandDownToken}
       />
     </div>
   )
