@@ -4,7 +4,8 @@ import { useScoreStore } from '../store/scoreStore'
 import { useThemeStore } from '../store/themeStore'
 import { useVerovio, loadScoreData } from '../hooks/useVerovio'
 import { downloadScore } from '../lib/download'
-import { VoiceBar } from '../components/VoiceBar'
+import { api, ApiRequestError } from '../lib/api'
+import { VoiceBar, type CommandToast } from '../components/VoiceBar'
 import { MoonIcon, PencilIcon, SunIcon } from '../components/icons'
 
 const SCALE = 40
@@ -12,18 +13,45 @@ const PAGE_GAP = 24
 const AREA_PAD = 96
 const SHEET_PAD_X = 112
 const BASE_SHEET = 720
+const HISTORY_LIMIT = 8
 
 export function Viewer() {
   const { id } = useParams()
-  const score = useScoreStore((s) => s.scores.find((sc) => sc.id === id))
+  const score = useScoreStore((s) => (id ? s.scores.find((sc) => sc.id === id) : undefined))
+  const loadScoreDetail = useScoreStore((s) => s.loadScoreDetail)
+  const [notFound, setNotFound] = useState(false)
 
-  if (!score) return <Navigate to="/dashboard" replace />
+  // Scores opened via a direct link (or a page refresh) may not be in the
+  // in-memory store yet — the dashboard only ever fetches summaries, and a
+  // fresh session hasn't fetched anything. Fetch this one score directly
+  // rather than bouncing the user back to the dashboard.
+  useEffect(() => {
+    if (!id || score) return
+    let cancelled = false
+    loadScoreDetail(id).then((result) => {
+      if (!cancelled && !result.ok) setNotFound(true)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [id, score, loadScoreDetail])
+
+  if (!id || notFound) return <Navigate to="/dashboard" replace />
+  if (!score) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-bg font-mono text-[12.5px] text-ghost">
+        loading score…
+      </div>
+    )
+  }
   return <ViewerInner key={score.id} scoreId={score.id} />
 }
 
 function ViewerInner({ scoreId }: { scoreId: string }) {
   const score = useScoreStore((s) => s.scores.find((sc) => sc.id === scoreId))!
   const updateScore = useScoreStore((s) => s.updateScore)
+  const renameScore = useScoreStore((s) => s.renameScore)
+  const loadScoreDetail = useScoreStore((s) => s.loadScoreDetail)
   const theme = useThemeStore((s) => s.theme)
   const toggleTheme = useThemeStore((s) => s.toggleTheme)
   const { toolkit, isLoading, error } = useVerovio()
@@ -37,9 +65,21 @@ function ViewerInner({ scoreId }: { scoreId: string }) {
   const [renaming, setRenaming] = useState(false)
   const [draftTitle, setDraftTitle] = useState(score.title)
 
+  const [detailLoading, setDetailLoading] = useState(score.data === undefined)
+  const [detailError, setDetailError] = useState<string | null>(null)
+
+  const [commandBusy, setCommandBusy] = useState(false)
+  const [toast, setToast] = useState<CommandToast | null>(null)
+  const [clarification, setClarification] = useState<string | null>(null)
+  const [highlightIds, setHighlightIds] = useState<string[]>([])
+  const [history, setHistory] = useState<string[]>([])
+
   const leftRef = useRef<HTMLDivElement>(null)
   const rightRef = useRef<HTMLDivElement>(null)
   const observerRef = useRef<ResizeObserver | null>(null)
+  const highlightTimeoutRef = useRef<number | null>(null)
+  const highlightAttemptedPageRef = useRef<number | null>(null)
+  const toastTimeoutRef = useRef<number | null>(null)
 
   const areaRef = useCallback((node: HTMLDivElement | null) => {
     observerRef.current?.disconnect()
@@ -64,6 +104,65 @@ function ViewerInner({ scoreId }: { scoreId: string }) {
   useEffect(() => {
     updateScore(scoreId, { lastPage: currentPage })
   }, [scoreId, currentPage, updateScore])
+
+  // Fetch the full MusicXML the first time this score is opened — the
+  // dashboard's list view only carries summary fields.
+  useEffect(() => {
+    if (score.data !== undefined) {
+      setDetailLoading(false)
+      return
+    }
+    let cancelled = false
+    setDetailLoading(true)
+    setDetailError(null)
+    loadScoreDetail(scoreId).then((result) => {
+      if (cancelled) return
+      setDetailLoading(false)
+      if (!result.ok) setDetailError(result.message)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [scoreId, score.data, loadScoreDetail])
+
+  // Pull command history for the chips row; if the endpoint isn't live yet
+  // (or the score has no history) this just leaves the chips empty.
+  useEffect(() => {
+    let cancelled = false
+    api
+      .getHistory(scoreId)
+      .then((res) => {
+        if (cancelled) return
+        setHistory(
+          res.items
+            .map((it) => it.confirmation || it.transcript)
+            .filter(Boolean)
+            .slice(-HISTORY_LIMIT),
+        )
+      })
+      .catch(() => {
+        // History chips are a nice-to-have; leave them empty on failure.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [scoreId])
+
+  useEffect(() => {
+    if (!toast) return
+    if (toastTimeoutRef.current) window.clearTimeout(toastTimeoutRef.current)
+    toastTimeoutRef.current = window.setTimeout(() => setToast(null), 4000)
+    return () => {
+      if (toastTimeoutRef.current) window.clearTimeout(toastTimeoutRef.current)
+    }
+  }, [toast])
+
+  useEffect(
+    () => () => {
+      if (highlightTimeoutRef.current) window.clearTimeout(highlightTimeoutRef.current)
+    },
+    [],
+  )
 
   useEffect(() => {
     if (!toolkit || !hasData || !leftRef.current || sheetWidth === 0) return
@@ -90,11 +189,139 @@ function ViewerInner({ scoreId }: { scoreId: string }) {
         rightRef.current.parentElement!.style.display = 'none'
       }
     }
-  }, [toolkit, hasData, score.data, score.format, score.totalPages, currentPage, sheetWidth, pagesShown, scoreId, updateScore])
+
+    // Highlight elements changed by the most recent command. The ids are
+    // only valid for the MusicXML just rendered — see clearHighlights().
+    if (highlightIds.length > 0) {
+      const found = highlightIds
+        .map((elId) => document.getElementById(elId))
+        .filter((el): el is HTMLElement => el !== null)
+
+      if (found.length > 0) {
+        if (highlightTimeoutRef.current) window.clearTimeout(highlightTimeoutRef.current)
+        found.forEach((el) => el.classList.add('nota-highlight'))
+        highlightAttemptedPageRef.current = null
+        const idsToClear = highlightIds
+        highlightTimeoutRef.current = window.setTimeout(() => {
+          found.forEach((el) => el.classList.remove('nota-highlight'))
+          setHighlightIds((current) => (current === idsToClear ? [] : current))
+        }, 3000)
+      } else if (highlightAttemptedPageRef.current !== page) {
+        // None of the changed ids are on the currently rendered page(s).
+        // Try to jump to the page that contains the first one; if Verovio
+        // can't locate it either, give up gracefully (no highlight).
+        highlightAttemptedPageRef.current = page
+        try {
+          const targetPage = toolkit.getPageWithElement(highlightIds[0])
+          if (targetPage && targetPage >= 1 && targetPage !== page) {
+            setCurrentPage(targetPage)
+          } else {
+            setHighlightIds([])
+          }
+        } catch {
+          setHighlightIds([])
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    toolkit,
+    hasData,
+    score.data,
+    score.format,
+    score.totalPages,
+    currentPage,
+    sheetWidth,
+    pagesShown,
+    scoreId,
+    updateScore,
+    highlightIds,
+  ])
+
+  const clearHighlights = useCallback(() => {
+    if (highlightTimeoutRef.current) {
+      window.clearTimeout(highlightTimeoutRef.current)
+      highlightTimeoutRef.current = null
+    }
+    document.querySelectorAll('.nota-highlight').forEach((el) => el.classList.remove('nota-highlight'))
+    highlightAttemptedPageRef.current = null
+    setHighlightIds([])
+  }, [])
+
+  const handleSubmitCommand = useCallback(
+    async (text: string) => {
+      if (commandBusy) return
+      clearHighlights()
+      setClarification(null)
+      setCommandBusy(true)
+      try {
+        const result = await api.sendCommand(scoreId, text)
+        updateScore(scoreId, { data: result.musicxml, format: 'xml', modifiedAt: Date.now(), lastSaid: text })
+        setHighlightIds(result.changed_element_ids)
+
+        if (result.needs_clarification) {
+          setClarification(result.confirmation)
+          setToast(null)
+        } else {
+          setClarification(null)
+          if (result.confirmation) {
+            setToast({ kind: 'confirmation', text: result.confirmation })
+            setHistory((h) => [...h, result.confirmation].slice(-HISTORY_LIMIT))
+          } else {
+            setToast(null)
+          }
+        }
+      } catch (err) {
+        if (err instanceof ApiRequestError && err.code === 'COMMAND_IN_PROGRESS') {
+          setToast({ kind: 'notice', text: 'Still working on the last command…' })
+        } else if (err instanceof ApiRequestError && err.code === 'EMPTY_TRANSCRIPT') {
+          setToast({ kind: 'notice', text: 'Didn’t catch that — try again.' })
+        } else {
+          setToast({
+            kind: 'error',
+            text: err instanceof Error ? err.message : 'That command failed.',
+          })
+        }
+      } finally {
+        setCommandBusy(false)
+      }
+    },
+    [commandBusy, clearHighlights, scoreId, updateScore],
+  )
+
+  const handleUndo = useCallback(async () => {
+    clearHighlights()
+    try {
+      const result = await api.undo(scoreId)
+      updateScore(scoreId, { data: result.musicxml, format: 'xml', modifiedAt: Date.now() })
+      setToast(result.summary ? { kind: 'notice', text: result.summary } : null)
+    } catch (err) {
+      if (err instanceof ApiRequestError && err.code === 'NOTHING_TO_UNDO') {
+        setToast({ kind: 'notice', text: 'Nothing to undo.' })
+      } else {
+        setToast({ kind: 'error', text: err instanceof Error ? err.message : 'Undo failed.' })
+      }
+    }
+  }, [clearHighlights, scoreId, updateScore])
+
+  const handleRedo = useCallback(async () => {
+    clearHighlights()
+    try {
+      const result = await api.redo(scoreId)
+      updateScore(scoreId, { data: result.musicxml, format: 'xml', modifiedAt: Date.now() })
+      setToast(result.summary ? { kind: 'notice', text: result.summary } : null)
+    } catch (err) {
+      if (err instanceof ApiRequestError && err.code === 'NOTHING_TO_REDO') {
+        setToast({ kind: 'notice', text: 'Nothing to redo.' })
+      } else {
+        setToast({ kind: 'error', text: err instanceof Error ? err.message : 'Redo failed.' })
+      }
+    }
+  }, [clearHighlights, scoreId, updateScore])
 
   const commitRename = () => {
     const title = draftTitle.trim()
-    if (title && title !== score.title) updateScore(scoreId, { title, modifiedAt: Date.now() })
+    if (title && title !== score.title) void renameScore(scoreId, title)
     else setDraftTitle(score.title)
     setRenaming(false)
   }
@@ -151,11 +378,10 @@ function ViewerInner({ scoreId }: { scoreId: string }) {
           )}
         </div>
         <div className="flex flex-1 items-center justify-end gap-3.5">
-          <span className="font-mono text-[11.5px] text-faint">{score.marks} marks</span>
+          <span className="font-mono text-[11.5px] text-faint">{score.marks} measures</span>
           <button
-            onClick={() => downloadScore(score)}
-            disabled={!hasData}
-            className="cursor-pointer whitespace-nowrap rounded-pill border border-line-strong bg-transparent px-4 py-1.75 font-sans text-[13px] font-medium text-ink hover:border-pine hover:text-pine disabled:cursor-default disabled:text-ghost disabled:hover:border-line-strong"
+            onClick={() => downloadScore(scoreId, `${score.title}.musicxml`)}
+            className="cursor-pointer whitespace-nowrap rounded-pill border border-line-strong bg-transparent px-4 py-1.75 font-sans text-[13px] font-medium text-ink hover:border-pine hover:text-pine"
           >
             Export MusicXML
           </button>
@@ -174,7 +400,13 @@ function ViewerInner({ scoreId }: { scoreId: string }) {
       <div ref={areaRef} className="relative flex-1 overflow-auto">
         <div className="flex min-h-full items-start justify-center gap-6 px-6 py-9">
           {!hasData ? (
-            <DemoSheet width={sheetWidth} title={score.title} composer={score.composer} />
+            <div className="self-center font-mono text-[12.5px] text-ghost">
+              {detailLoading ? 'loading score…' : detailError ? (
+                <span className="text-error">{detailError}</span>
+              ) : (
+                'no score data yet'
+              )}
+            </div>
           ) : error ? (
             <div className="self-center text-sm text-error">Failed to load Verovio: {error}</div>
           ) : isLoading ? (
@@ -239,29 +471,15 @@ function ViewerInner({ scoreId }: { scoreId: string }) {
         </div>
       </div>
 
-      <VoiceBar />
-    </div>
-  )
-}
-
-function DemoSheet({ width, title, composer }: { width: number; title: string; composer?: string }) {
-  return (
-    <div
-      className="flex shrink-0 flex-col gap-11 border border-line-faint bg-card px-14 py-13 shadow-sheet"
-      style={{ width }}
-    >
-      <div className="text-center">
-        <div className="font-display text-[22px] text-ink">{title}</div>
-        {composer && (
-          <div className="mt-1 font-mono text-[11px] text-ghost">{composer}</div>
-        )}
-      </div>
-      {Array.from({ length: 5 }, (_, i) => (
-        <div key={i} className="staff-lines h-6.5!" />
-      ))}
-      <div className="text-center font-mono text-[10px] text-ghost">
-        demo score — upload a MusicXML file to see a live verovio render
-      </div>
+      <VoiceBar
+        history={history}
+        busy={commandBusy}
+        toast={toast}
+        clarification={clarification}
+        onSubmitCommand={(text) => void handleSubmitCommand(text)}
+        onUndo={() => void handleUndo()}
+        onRedo={() => void handleRedo()}
+      />
     </div>
   )
 }

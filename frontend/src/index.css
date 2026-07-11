@@ -235,3 +235,22 @@ body {
   border-radius: 999px;
   animation: nota-hairline 1.2s ease-in-out infinite;
 }
+
+/* Applied to newly-changed score elements (by xml:id) right after a
+   command re-renders the score, so the musician can see what just
+   changed. Relies on `color` inheriting down to descendant glyphs that
+   use `fill: currentColor` (see the .score-svg rules above). */
+@keyframes nota-highlight-fade {
+  0% {
+    color: var(--brass);
+  }
+  65% {
+    color: var(--brass);
+  }
+  100% {
+    color: inherit;
+  }
+}
+.nota-highlight {
+  animation: nota-highlight-fade 3s ease-out forwards;
+}

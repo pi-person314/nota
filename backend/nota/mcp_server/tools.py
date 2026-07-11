@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import music21 as m21
 
+from .. import storage
 from . import ids, location
 from .errors import ErrorCode, ToolError
 from .harness import ToolPlan, run_tool
@@ -235,3 +236,48 @@ def add_articulation(
         return ToolPlan(apply=apply_single)
 
     return run_tool(score_id, label, planner)
+
+
+def undo(score_id: str) -> dict:
+    """Revert the score's most recent change by restoring the previous
+    undo-stack snapshot, and push the just-reverted state onto the redo
+    stack. Returns the structured success/error contract every tool uses;
+    on an empty undo stack this is NOTHING_TO_UNDO rather than a no-op
+    success, so a caller (Claude or the direct HTTP endpoint) can say so.
+    """
+    if storage.path_for(score_id) is None:
+        return {
+            "success": False,
+            "error_code": ErrorCode.SCORE_NOT_FOUND,
+            "message": f"No score with id {score_id}.",
+        }
+
+    label = storage.undo(score_id)
+    if label is None:
+        return {
+            "success": False,
+            "error_code": ErrorCode.NOTHING_TO_UNDO,
+            "message": "There is nothing to undo.",
+        }
+    return {"success": True, "changed_element_ids": [], "summary": f"Undid: {label}"}
+
+
+def redo(score_id: str) -> dict:
+    """Inverse of undo(): re-apply the most recently undone change from the
+    redo stack, pushing the pre-redo state back onto the undo stack.
+    """
+    if storage.path_for(score_id) is None:
+        return {
+            "success": False,
+            "error_code": ErrorCode.SCORE_NOT_FOUND,
+            "message": f"No score with id {score_id}.",
+        }
+
+    label = storage.redo(score_id)
+    if label is None:
+        return {
+            "success": False,
+            "error_code": ErrorCode.NOTHING_TO_REDO,
+            "message": "There is nothing to redo.",
+        }
+    return {"success": True, "changed_element_ids": [], "summary": f"Redid: {label}"}

@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { GoogleIcon } from '../components/icons'
+import { useAuthStore } from '../store/authStore'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -76,11 +77,12 @@ function Field({
   )
 }
 
-function PrimaryButton({ children }: { children: ReactNode }) {
+function PrimaryButton({ children, disabled }: { children: ReactNode; disabled?: boolean }) {
   return (
     <button
       type="submit"
-      className="w-full cursor-pointer rounded-pill border-none bg-pine py-3.25 font-sans text-[14.5px] font-semibold text-on-pine hover:bg-pine-deep"
+      disabled={disabled}
+      className="w-full cursor-pointer rounded-pill border-none bg-pine py-3.25 font-sans text-[14.5px] font-semibold text-on-pine hover:bg-pine-deep disabled:cursor-default disabled:bg-ghost"
     >
       {children}
     </button>
@@ -89,19 +91,28 @@ function PrimaryButton({ children }: { children: ReactNode }) {
 
 export function Login() {
   const navigate = useNavigate()
+  const login = useAuthStore((s) => s.login)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({})
+  const [formError, setFormError] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
 
   const validateEmail = (v: string) =>
     !v.trim() ? 'Enter your email.' : !EMAIL_RE.test(v) ? 'That doesn’t look like an email.' : undefined
   const validatePassword = (v: string) => (!v ? 'Enter your password.' : undefined)
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     const next = { email: validateEmail(email), password: validatePassword(password) }
     setErrors(next)
-    if (!next.email && !next.password) navigate('/dashboard')
+    setFormError(null)
+    if (next.email || next.password) return
+    setSubmitting(true)
+    const result = await login(email, password)
+    setSubmitting(false)
+    if (result.ok) navigate('/dashboard')
+    else setFormError(result.message)
   }
 
   return (
@@ -142,8 +153,9 @@ export function Login() {
             </a>
           }
         />
+        {formError && <div className="text-xs text-error">{formError}</div>}
         <div className="mt-1">
-          <PrimaryButton>Log in</PrimaryButton>
+          <PrimaryButton disabled={submitting}>{submitting ? 'Logging in…' : 'Log in'}</PrimaryButton>
         </div>
         <div className="flex items-center gap-3 text-xs text-ghost">
           <span className="h-px flex-1 bg-line" />
@@ -152,8 +164,9 @@ export function Login() {
         </div>
         <button
           type="button"
-          onClick={() => navigate('/dashboard')}
-          className="flex w-full cursor-pointer items-center justify-center gap-2.5 rounded-pill border border-line-strong bg-transparent py-3 font-sans text-sm font-medium text-ink hover:border-pine"
+          disabled
+          title="Google sign-in is coming soon"
+          className="flex w-full cursor-default items-center justify-center gap-2.5 rounded-pill border border-line-strong bg-transparent py-3 font-sans text-sm font-medium text-ghost"
         >
           <GoogleIcon />
           Continue with Google
@@ -165,10 +178,13 @@ export function Login() {
 
 export function Signup() {
   const navigate = useNavigate()
+  const signup = useAuthStore((s) => s.signup)
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [errors, setErrors] = useState<{ name?: string; email?: string; password?: string }>({})
+  const [formError, setFormError] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
 
   const validateName = (v: string) => (!v.trim() ? 'Tell us your name.' : undefined)
   const validateEmail = (v: string) =>
@@ -176,7 +192,7 @@ export function Signup() {
   const validatePassword = (v: string) =>
     v.length < 8 ? 'At least 8 characters.' : undefined
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     const next = {
       name: validateName(name),
@@ -184,7 +200,20 @@ export function Signup() {
       password: validatePassword(password),
     }
     setErrors(next)
-    if (!next.name && !next.email && !next.password) navigate('/dashboard')
+    setFormError(null)
+    if (next.name || next.email || next.password) return
+    setSubmitting(true)
+    const result = await signup(name, email, password)
+    setSubmitting(false)
+    if (result.ok) {
+      navigate('/dashboard')
+      return
+    }
+    if (result.message.toLowerCase().includes('email')) {
+      setErrors((er) => ({ ...er, email: result.message }))
+    } else {
+      setFormError(result.message)
+    }
   }
 
   return (
@@ -231,7 +260,8 @@ export function Signup() {
           hint="At least 8 characters."
           autoComplete="new-password"
         />
-        <PrimaryButton>Create account</PrimaryButton>
+        {formError && <div className="text-xs text-error">{formError}</div>}
+        <PrimaryButton disabled={submitting}>{submitting ? 'Creating account…' : 'Create account'}</PrimaryButton>
         <div className="text-center text-xs text-faint">Free to use. No credit card required.</div>
       </form>
     </AuthShell>

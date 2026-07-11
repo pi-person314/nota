@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useScoreStore, type ShelfTab } from '../store/scoreStore'
+import { useAuthStore } from '../store/authStore'
 import { useThemeStore } from '../store/themeStore'
 import { ListeningPill } from './ListeningPill'
 
@@ -13,7 +14,9 @@ const TABS: { id: ShelfTab; label: string }[] = [
 export function Navbar() {
   const tab = useScoreStore((s) => s.tab)
   const setTab = useScoreStore((s) => s.setTab)
-  const userName = useScoreStore((s) => s.userName)
+  const resetScores = useScoreStore((s) => s.reset)
+  const userName = useAuthStore((s) => s.user?.name ?? '')
+  const logout = useAuthStore((s) => s.logout)
   const theme = useThemeStore((s) => s.theme)
   const toggleTheme = useThemeStore((s) => s.toggleTheme)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -82,7 +85,10 @@ export function Navbar() {
                 label="Log out"
                 onClick={() => {
                   setMenuOpen(false)
-                  navigate('/')
+                  void logout().then(() => {
+                    resetScores()
+                    navigate('/')
+                  })
                 }}
               />
             </div>

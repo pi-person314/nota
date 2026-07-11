@@ -6,7 +6,13 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     proxy: {
-      '/api': 'http://localhost:5000',
+      // 127.0.0.1, not localhost: Flask's dev server binds IPv4 only, and
+      // on some setups "localhost" resolves to the IPv6 loopback first,
+      // which the proxy then fails to connect to.
+      '/api': {
+        target: 'http://127.0.0.1:5001',
+        changeOrigin: true,
+      },
     },
   },
   optimizeDeps: {

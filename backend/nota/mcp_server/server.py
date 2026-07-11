@@ -151,6 +151,28 @@ def add_articulation(
     )
 
 
+@mcp.tool(
+    description=(
+        "Undo the most recent change to the score. Use this for phrases like "
+        "'undo', 'go back', 'never mind', or 'undo that'. Returns NOTHING_TO_UNDO "
+        "if there is no change to undo."
+    )
+)
+def undo(score_id: ScoreId) -> dict:
+    return tools.undo(score_id)
+
+
+@mcp.tool(
+    description=(
+        "Redo the most recently undone change to the score. Use this for phrases "
+        "like 'redo', 'redo that', or 'put it back'. Returns NOTHING_TO_REDO if "
+        "there is no change to redo."
+    )
+)
+def redo(score_id: ScoreId) -> dict:
+    return tools.redo(score_id)
+
+
 def main() -> None:
     """Entry point for `python -m nota.mcp_server`."""
     storage.ensure_initialized()

@@ -1,13 +1,8 @@
 import { useRef, useState } from 'react'
-import { useScoreStore, type ScoreFormat } from '../store/scoreStore'
-import { renderThumbnail } from '../hooks/useVerovio'
+import { useScoreStore } from '../store/scoreStore'
 import { UploadIcon } from './icons'
 
 const ACCEPT = '.musicxml,.xml,.mxl'
-
-function titleFromFileName(name: string): string {
-  return name.replace(/\.(musicxml|xml|mxl)$/i, '')
-}
 
 interface UploadDropzoneProps {
   large?: boolean
@@ -15,48 +10,19 @@ interface UploadDropzoneProps {
 }
 
 export function UploadDropzone({ large = false, headline = 'Drop a score here' }: UploadDropzoneProps) {
-  const addScore = useScoreStore((s) => s.addScore)
-  const updateScore = useScoreStore((s) => s.updateScore)
-  const removeScore = useScoreStore((s) => s.removeScore)
+  const uploadScore = useScoreStore((s) => s.uploadScore)
   const [dragOver, setDragOver] = useState(false)
   const [uploading, setUploading] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const handleFile = async (file: File) => {
-    const format: ScoreFormat = /\.mxl$/i.test(file.name) ? 'mxl' : 'xml'
     setError(null)
     setUploading(file.name)
-    const id = addScore({
-      title: titleFromFileName(file.name),
-      starred: false,
-      marks: 0,
-      pending: true,
-      fileName: file.name,
-      format,
-    })
-    try {
-      const data = format === 'mxl' ? await file.arrayBuffer() : await file.text()
-      const rendered = await renderThumbnail(data, format)
-      if (!rendered) {
-        removeScore(id)
-        setError(`Couldn't read ${file.name} — is it valid MusicXML?`)
-        return
-      }
-      updateScore(id, {
-        data,
-        thumbnail: rendered.svg,
-        totalPages: rendered.pageCount,
-        pending: false,
-        modifiedAt: Date.now(),
-      })
-    } catch {
-      removeScore(id)
-      setError(`Couldn't read ${file.name} — is it valid MusicXML?`)
-    } finally {
-      setUploading(null)
-      if (inputRef.current) inputRef.current.value = ''
-    }
+    const result = await uploadScore(file)
+    setUploading(null)
+    if (inputRef.current) inputRef.current.value = ''
+    if (!result.ok) setError(result.message)
   }
 
   const active = dragOver ? 'border-pine text-pine' : 'border-ghost text-muted'

@@ -11,6 +11,7 @@ declare module 'verovio/esm' {
     loadZipDataBuffer(data: ArrayBuffer): boolean
     renderToSVG(page?: number): string
     getPageCount(): number
+    getPageWithElement(xmlId: string): number
     setOptions(options: Record<string, unknown>): void
     getOptions(): Record<string, unknown>
   }

@@ -23,6 +23,7 @@ class Config:
     score_storage_dir: str
     max_upload_mb: int
     port: int
+    claude_model: str
 
     @property
     def max_upload_bytes(self) -> int:
@@ -56,10 +57,13 @@ def load_config(env: dict | None = None) -> Config:
     except ValueError as exc:
         raise ConfigError("PORT must be an integer") from exc
 
+    claude_model = source.get("CLAUDE_MODEL", "claude-sonnet-4-6")
+
     return Config(
         secret_key=secret_key,
         database_url=database_url,
         score_storage_dir=score_storage_dir,
         max_upload_mb=max_upload_mb,
         port=port,
+        claude_model=claude_model,
     )

@@ -1,5 +1,6 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useScoreStore, type Score, type SortMode, type ShelfTab } from '../store/scoreStore'
+import { useAuthStore } from '../store/authStore'
 import { timeOfDayGreeting, countWord } from '../lib/time'
 import { Navbar } from '../components/Navbar'
 import { ContinueCard } from '../components/ContinueCard'
@@ -27,7 +28,14 @@ export function Dashboard() {
   const sortMode = useScoreStore((s) => s.sortMode)
   const cycleSort = useScoreStore((s) => s.cycleSort)
   const tab = useScoreStore((s) => s.tab)
-  const userName = useScoreStore((s) => s.userName)
+  const fetchScores = useScoreStore((s) => s.fetchScores)
+  const loading = useScoreStore((s) => s.loading)
+  const loadError = useScoreStore((s) => s.loadError)
+  const userName = useAuthStore((s) => s.user?.name ?? '')
+
+  useEffect(() => {
+    void fetchScores()
+  }, [fetchScores])
 
   const lastOpened = useMemo(
     () => (scores.length ? [...scores].sort((a, b) => b.openedAt - a.openedAt)[0] : undefined),
@@ -63,8 +71,13 @@ export function Dashboard() {
             {lastIn && ` You were last in the ${lastIn}.`}
           </p>
         )}
+        {loadError && <p className="mt-2 text-sm text-error">{loadError}</p>}
 
-        {!hasScores ? (
+        {loading && !hasScores ? (
+          <div className="mt-10 py-12 text-center font-mono text-[12.5px] text-ghost">
+            loading your scores…
+          </div>
+        ) : !hasScores ? (
           <div className="mt-10">
             <UploadDropzone large headline="Nothing on your stand yet." />
           </div>

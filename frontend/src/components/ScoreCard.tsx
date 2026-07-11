@@ -8,7 +8,7 @@ import { ConfirmDialog } from './ConfirmDialog'
 
 export function ScoreCard({ score, delay = 0 }: { score: Score; delay?: number }) {
   const toggleStar = useScoreStore((s) => s.toggleStar)
-  const updateScore = useScoreStore((s) => s.updateScore)
+  const renameScore = useScoreStore((s) => s.renameScore)
   const removeScore = useScoreStore((s) => s.removeScore)
   const markOpened = useScoreStore((s) => s.markOpened)
   const navigate = useNavigate()
@@ -43,7 +43,7 @@ export function ScoreCard({ score, delay = 0 }: { score: Score; delay?: number }
   const commitRename = () => {
     const title = draftTitle.trim()
     if (title && title !== score.title) {
-      updateScore(score.id, { title, modifiedAt: Date.now() })
+      void renameScore(score.id, title)
     } else {
       setDraftTitle(score.title)
     }
@@ -123,10 +123,9 @@ export function ScoreCard({ score, delay = 0 }: { score: Score; delay?: number }
                   />
                   <CardMenuItem
                     label="Download MusicXML"
-                    disabled={!score.data}
                     onClick={() => {
                       setMenuOpen(false)
-                      downloadScore(score)
+                      downloadScore(score.id, `${score.title}.musicxml`)
                     }}
                   />
                   <div className="mx-4 my-1 h-px bg-line-faint" />
@@ -145,7 +144,7 @@ export function ScoreCard({ score, delay = 0 }: { score: Score; delay?: number }
               aria-pressed={score.starred}
               onClick={(e) => {
                 e.stopPropagation()
-                toggleStar(score.id)
+                void toggleStar(score.id)
               }}
               className={`cursor-pointer border-none bg-transparent p-0 text-[15px] leading-none ${
                 score.starred ? 'text-brass' : 'text-line-strong hover:text-ghost'
@@ -159,7 +158,7 @@ export function ScoreCard({ score, delay = 0 }: { score: Score; delay?: number }
           <div className="text-[12.5px] text-faint">
             {scoreMeta(score, relativeTime(score.openedAt))}
           </div>
-          <div className="font-mono text-[11px] text-ghost">{score.marks} marks</div>
+          <div className="font-mono text-[11px] text-ghost">{score.marks} measures</div>
         </div>
       </div>
       {confirming && (
@@ -167,7 +166,7 @@ export function ScoreCard({ score, delay = 0 }: { score: Score; delay?: number }
           title={`Delete “${score.title}”?`}
           body="This takes it off your stand for good. Marks and the file go with it."
           confirmLabel="Delete"
-          onConfirm={() => removeScore(score.id)}
+          onConfirm={() => void removeScore(score.id)}
           onCancel={() => setConfirming(false)}
         />
       )}

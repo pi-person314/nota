@@ -10,9 +10,11 @@ from __future__ import annotations
 from flask import Flask
 
 from .auth import bp as auth_bp
+from .commands import bp as commands_bp
 from .scores import bp as scores_bp
 
 
 def register_blueprints(app: Flask) -> None:
     app.register_blueprint(auth_bp)
     app.register_blueprint(scores_bp)
+    app.register_blueprint(commands_bp)
