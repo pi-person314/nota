@@ -4,6 +4,7 @@ consistent JSON error shape used across the whole HTTP API.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from functools import wraps
 from typing import Any, Callable
 
@@ -16,6 +17,19 @@ from .. import models
 def error_response(status: int, code: str, message: str):
     """Build the standard `{"error": CODE, "message": ...}` JSON error body."""
     return jsonify({"error": code, "message": message}), status
+
+
+def iso_utc(dt: datetime) -> str:
+    """Serialize a timestamp as ISO 8601 with an explicit UTC offset.
+
+    Timestamps are stored in UTC, but SQLite round-trips drop tzinfo, so
+    values read back from the database are naive. Treat naive datetimes as
+    UTC so every API response carries the same `+00:00` suffix regardless
+    of whether the row was freshly created or reloaded.
+    """
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc).isoformat()
 
 
 def current_user_id() -> str | None:

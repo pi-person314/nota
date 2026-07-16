@@ -157,6 +157,24 @@ def find_note_at(measure: m21.stream.Measure, beat: float):
     return chosen
 
 
+def note_at_offset_or_none(measure: m21.stream.Measure, offset: float):
+    """Return the note/chord starting exactly at `offset` within `measure`
+    (preferring a full-duration note over a grace note at the same offset,
+    as `find_note_at` does), or None if nothing starts there.
+
+    Unlike `find_note_at`, this never raises. It exists for tools whose
+    own created element does not carry its id through MusicXML export
+    (e.g. a free-floating text expression or rehearsal mark, which are
+    not required to sit on a note) but that still want to report a
+    nearby note's id as a best-effort highlighting anchor when one
+    happens to be there.
+    """
+    all_notes = list(measure.recurse().notes)
+    candidates = [n for n in all_notes if abs(n.offset - offset) < _EPSILON]
+    non_grace = [n for n in candidates if not n.duration.isGrace]
+    return non_grace[0] if non_grace else (candidates[0] if candidates else None)
+
+
 def notes_in_range(
     part,
     start_measure: m21.stream.Measure,

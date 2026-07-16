@@ -17,7 +17,7 @@ from .. import db as db_module
 from .. import models
 from .. import storage
 from ..orchestrator import loop, locks
-from ._helpers import current_user_id, error_response, login_required
+from ._helpers import current_user_id, error_response, iso_utc, login_required
 
 bp = Blueprint("commands", __name__, url_prefix="/api/scores")
 
@@ -157,7 +157,7 @@ def history(score_id):
                 "transcript": row.transcript,
                 "confirmation": row.confirmation,
                 "tools_called": json.loads(row.tools_called_json or "[]"),
-                "created_at": row.created_at.isoformat(),
+                "created_at": iso_utc(row.created_at),
             }
             for row in rows
         ]

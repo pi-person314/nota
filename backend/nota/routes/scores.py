@@ -19,7 +19,7 @@ from .. import db as db_module
 from .. import models
 from .. import storage
 from . import musicxml_ingest as ingest
-from ._helpers import current_user_id, error_response, login_required
+from ._helpers import current_user_id, error_response, iso_utc, login_required
 
 bp = Blueprint("scores", __name__, url_prefix="/api/scores")
 
@@ -41,9 +41,9 @@ def _score_summary(score: models.Score) -> dict:
         "is_starred": score.is_starred,
         "measure_count": score.measure_count,
         "has_pickup": score.has_pickup,
-        "created_at": score.created_at.isoformat(),
-        "last_opened_at": score.last_opened_at.isoformat(),
-        "last_modified_at": score.last_modified_at.isoformat(),
+        "created_at": iso_utc(score.created_at),
+        "last_opened_at": iso_utc(score.last_opened_at),
+        "last_modified_at": iso_utc(score.last_modified_at),
     }
 
 
