@@ -3,6 +3,7 @@ import { Link, Navigate, useParams } from 'react-router-dom'
 import { useScoreStore } from '../store/scoreStore'
 import { useThemeStore } from '../store/themeStore'
 import { useVerovio, loadScoreData } from '../hooks/useVerovio'
+import { useSpeechReadback } from '../hooks/useSpeechReadback'
 import { downloadScore } from '../lib/download'
 import { api, ApiRequestError } from '../lib/api'
 import { VoiceBar, type CommandToast } from '../components/VoiceBar'
@@ -55,6 +56,7 @@ function ViewerInner({ scoreId }: { scoreId: string }) {
   const theme = useThemeStore((s) => s.theme)
   const toggleTheme = useThemeStore((s) => s.toggleTheme)
   const { toolkit, isLoading, error } = useVerovio()
+  const { speak, cancel: cancelSpeech } = useSpeechReadback()
 
   const [currentPage, setCurrentPage] = useState(() =>
     Math.max(1, Math.min(score.lastPage, score.totalPages ?? score.lastPage)),
@@ -260,6 +262,9 @@ function ViewerInner({ scoreId }: { scoreId: string }) {
       clearHighlights()
       setClarification(null)
       setCommandBusy(true)
+      // A new command is about to start (and may re-arm the mic); don't let
+      // a reply from the previous one keep talking over it.
+      cancelSpeech()
       try {
         const result = await api.sendCommand(scoreId, text)
         updateScore(scoreId, { data: result.musicxml, format: 'xml', modifiedAt: Date.now(), lastSaid: text })
@@ -270,10 +275,15 @@ function ViewerInner({ scoreId }: { scoreId: string }) {
           setClarification(result.confirmation)
           setToast(null)
           // First clarification in a row: re-arm the mic so the musician
-          // can answer hands-free. A second one in a row: stop guessing.
-          if (clarificationStreakRef.current <= 1) {
-            setVoiceRearmToken((t) => t + 1)
-          } else {
+          // can answer hands-free — but only once Nota is done asking, so
+          // the mic doesn't end up recording its own voice. A second
+          // clarification in a row: stop guessing, no need to wait on
+          // speech for that since it just cuts the mic and hands off to text.
+          const shouldRearm = clarificationStreakRef.current <= 1
+          speak(result.confirmation, () => {
+            if (shouldRearm) setVoiceRearmToken((t) => t + 1)
+          })
+          if (!shouldRearm) {
             setVoiceStandDownToken((t) => t + 1)
           }
         } else {
@@ -282,6 +292,7 @@ function ViewerInner({ scoreId }: { scoreId: string }) {
           if (result.confirmation) {
             setToast({ kind: 'confirmation', text: result.confirmation })
             setHistory((h) => [...h, result.confirmation].slice(-HISTORY_LIMIT))
+            speak(result.confirmation)
           } else {
             setToast(null)
           }
@@ -302,7 +313,7 @@ function ViewerInner({ scoreId }: { scoreId: string }) {
         setCommandBusy(false)
       }
     },
-    [commandBusy, clearHighlights, scoreId, updateScore],
+    [commandBusy, clearHighlights, scoreId, updateScore, cancelSpeech, speak],
   )
 
   const handleUndo = useCallback(async () => {
@@ -498,6 +509,7 @@ function ViewerInner({ scoreId }: { scoreId: string }) {
         onVoiceMessage={(t) => setToast(t)}
         voiceRearmToken={voiceRearmToken}
         voiceStandDownToken={voiceStandDownToken}
+        onManualRecordStart={cancelSpeech}
       />
     </div>
   )

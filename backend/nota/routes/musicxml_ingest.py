@@ -233,7 +233,20 @@ def parse_score_metadata(text: str, filename: str) -> ScoreMetadata:
     fallback_name = os.path.splitext(os.path.basename(filename or ""))[0]
     display_name = (title or "").strip() or fallback_name or "Untitled Score"
 
-    canonical_bytes = GeneralObjectExporter(parsed).parse()
+    # music21 can successfully *parse* a file whose content it still
+    # cannot re-serialize (observed on a real score: a note with an
+    # extreme nested tuplet duration that resolves to a MusicXML note
+    # type shorter than any the format defines). Left uncaught, that
+    # raises out of this function as a generic exception, which the route
+    # handler has no handler for and would surface as a bare 500 instead
+    # of a normal rejected-upload response — so this must be treated the
+    # same way an outright parse failure is.
+    try:
+        canonical_bytes = GeneralObjectExporter(parsed).parse()
+    except Exception as exc:
+        raise UploadRejected(
+            "INVALID_MUSICXML", f"music21 could not re-export this file: {exc}"
+        ) from exc
     canonical_xml = canonical_bytes.decode("utf-8")
 
     return ScoreMetadata(

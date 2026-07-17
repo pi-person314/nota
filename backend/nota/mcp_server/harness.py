@@ -85,7 +85,25 @@ def run_tool(score_id: str, label: str, planner: Planner) -> dict:
 
     changed_element_ids, summary = plan.apply()
 
-    score.write("musicxml", fp=path)
+    try:
+        score.write("musicxml", fp=path)
+    except Exception as exc:
+        # Defense in depth: every score reaching this point round-tripped
+        # cleanly through music21 at upload time (see musicxml_ingest.py),
+        # so this should not be reachable in practice. But some music21
+        # content is parseable and yet not re-exportable (observed on a
+        # real score: a nested tuplet duration that resolves to a
+        # MusicXML note type shorter than any the format defines), so a
+        # mutation could in principle create — or merely reveal — such a
+        # case. Surfacing it as a structured error keeps a bug here from
+        # crashing the caller outright. The pre-mutation snapshot taken
+        # above is left in place; it is harmless (undoing it just
+        # restores the identical pre-mutation state) and simpler than
+        # trying to retract it.
+        return _error(
+            ErrorCode.EXPORT_FAILED,
+            f"Could not save this change: the score could not be re-serialized to MusicXML ({exc}).",
+        )
 
     with open(path, "r", encoding="utf-8") as f:
         written_xml = f.read()

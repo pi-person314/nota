@@ -25,6 +25,8 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 from nota.orchestrator import loop
 
 from .dataset import CASES, CATEGORIES
@@ -153,6 +155,11 @@ def main(argv: list[str] | None = None) -> int:
         "--category", type=str, default=None, choices=CATEGORIES, help="Only run cases in this category."
     )
     args = parser.parse_args(argv)
+
+    # Load backend/.env into the process environment the same way the rest
+    # of the app expects it to be available (existing process env vars take
+    # precedence -- this never overrides an already-set key).
+    load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=False)
 
     if not os.environ.get("ANTHROPIC_API_KEY"):
         print(

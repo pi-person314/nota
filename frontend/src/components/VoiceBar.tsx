@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { MicIcon } from './icons'
+import { MicIcon, SpeakerIcon, SpeakerMuteIcon } from './icons'
 import { api, ApiRequestError } from '../lib/api'
 import { useVoiceRecorder } from '../hooks/useVoiceRecorder'
+import { useReadbackStore } from '../store/readbackStore'
 
 export interface CommandToast {
   kind: 'confirmation' | 'notice' | 'error'
@@ -24,6 +25,10 @@ interface VoiceBarProps {
   // Bumped by the parent when a *second* consecutive clarification arrives —
   // guards against re-arm loops by cutting the mic and handing off to text.
   voiceStandDownToken: number
+  // Called whenever the musician manually (re)starts the mic, so any
+  // readback still playing gets cut off before it can bleed into the
+  // recording.
+  onManualRecordStart: () => void
 }
 
 // Shortest transcript worth sending to the command endpoint. Anything
@@ -42,10 +47,13 @@ export function VoiceBar({
   onVoiceMessage,
   voiceRearmToken,
   voiceStandDownToken,
+  onManualRecordStart,
 }: VoiceBarProps) {
   const [draft, setDraft] = useState('')
   const [retryable, setRetryable] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const readbackMuted = useReadbackStore((s) => s.muted)
+  const toggleReadbackMuted = useReadbackStore((s) => s.toggleMuted)
 
   const handleRecordingReady = useCallback(
     async (blob: Blob) => {
@@ -141,12 +149,14 @@ export function VoiceBar({
     if (recorder.status === 'recording') {
       recorder.stop()
     } else if (recorder.status === 'idle') {
+      onManualRecordStart()
       setRetryable(false)
       void recorder.start()
     }
   }
 
   const handleRetry = () => {
+    onManualRecordStart()
     setRetryable(false)
     void recorder.start()
   }
@@ -245,6 +255,15 @@ export function VoiceBar({
             className="min-h-9 cursor-pointer whitespace-nowrap rounded-pill border border-line bg-transparent px-3.5 py-1.5 font-sans text-[12.5px] text-muted hover:border-pine hover:text-pine"
           >
             Redo
+          </button>
+          <button
+            aria-label={readbackMuted ? 'Unmute spoken replies' : 'Mute spoken replies'}
+            aria-pressed={readbackMuted}
+            title={readbackMuted ? 'Turn readback on' : 'Turn readback off'}
+            onClick={toggleReadbackMuted}
+            className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-pill border border-line bg-transparent text-muted hover:border-pine hover:text-pine"
+          >
+            {readbackMuted ? <SpeakerMuteIcon /> : <SpeakerIcon />}
           </button>
         </div>
         {history.length > 0 && (

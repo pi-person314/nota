@@ -55,8 +55,28 @@ def measure_count(part) -> int:
     return max(numbers) if numbers else 0
 
 
+def _pickup_measure_number(part) -> int | None:
+    """Return the number of `part`'s pickup (anacrusis) measure, or None
+    if it has none. Most scores number the pickup 0, but real-world
+    MusicXML sometimes numbers it 1 instead (with no measure 0 at all) and
+    signals the pickup only through `paddingLeft` on that first measure —
+    observed on a real corpus score (Schoenberg op. 19 no. 6). Only the
+    lowest-numbered measure is ever checked: a `paddingLeft` on a later
+    measure means a mid-piece insertion/anacrusis, not a pickup.
+    """
+    measures = _measure_map(part)
+    if not measures:
+        return None
+    if 0 in measures:
+        return 0
+    first_number = min(measures)
+    if (measures[first_number].paddingLeft or 0) > 0:
+        return first_number
+    return None
+
+
 def has_pickup(part) -> bool:
-    return 0 in _measure_map(part)
+    return _pickup_measure_number(part) is not None
 
 
 def resolve_measure(part, measure_num: int) -> m21.stream.Measure:
@@ -67,7 +87,12 @@ def resolve_measure(part, measure_num: int) -> m21.stream.Measure:
     measures = _measure_map(part)
     if measure_num not in measures:
         count = measure_count(part)
-        pickup_note = " (plus a pickup measure, numbered 0)" if has_pickup(part) else ""
+        pickup_number = _pickup_measure_number(part)
+        pickup_note = (
+            f" (plus a pickup measure, numbered {pickup_number})"
+            if pickup_number is not None
+            else ""
+        )
         raise ToolError(
             ErrorCode.MEASURE_OUT_OF_RANGE,
             f"Measure {measure_num} does not exist. The score has "

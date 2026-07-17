@@ -5,6 +5,8 @@ the chord id fallback, and pickup beat arithmetic edge cases.
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 import music21 as m21
 import pytest
 
@@ -54,6 +56,33 @@ def test_id_verification_raises_when_id_not_serialized(make_score):
 
     with pytest.raises(RuntimeError, match="nota-never-written"):
         run_tool(sid, "bogus", planner)
+
+
+def test_export_failure_during_apply_returns_structured_error_not_a_crash(
+    make_score, snapshot_count
+):
+    """Regression test for a real breakage found by round-tripping every
+    bundled music21 corpus score through this pipeline: some real scores
+    parse cleanly but cannot be re-exported by music21 (a note with a
+    duration so short — a "2048th" from a nested tuplet — that music21's
+    own MusicXML writer refuses to emit it). Upload-time ingestion now
+    rejects such scores outright (see test_upload_real_scores.py), so this
+    should not be reachable via a normal edit — but the harness must still
+    fail safely, as a structured EXPORT_FAILED error, rather than letting
+    an unexpected write-time exception crash the caller. Simulated here
+    with a mocked `Score.write` rather than a real unexportable score so
+    the test stays fast and independent of any specific corpus content.
+    """
+    sid = make_score("simple_4_4")
+    before = storage.read_xml(sid)
+
+    with patch.object(m21.stream.Score, "write", side_effect=RuntimeError("boom")):
+        result = tools.add_dynamic(sid, measure=1, beat=1, dynamic="f")
+
+    err = assert_error(result, ErrorCode.EXPORT_FAILED)
+    assert "boom" in err["message"]
+    # Nothing was actually written to disk.
+    assert storage.read_xml(sid) == before
 
 
 def test_music21_drops_chord_level_ids_so_assign_id_falls_back():

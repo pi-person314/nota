@@ -1,0 +1,1980 @@
+{
+  "generated_at": "2026-07-16T03:19:49.661853+00:00",
+  "total": 58,
+  "passed": 50,
+  "by_category": {
+    "simple": {
+      "total": 11,
+      "passed": 11
+    },
+    "synonyms": {
+      "total": 7,
+      "passed": 7
+    },
+    "ranges": {
+      "total": 5,
+      "passed": 5
+    },
+    "compound": {
+      "total": 6,
+      "passed": 6
+    },
+    "transcription_artifacts": {
+      "total": 9,
+      "passed": 5
+    },
+    "context_carryover": {
+      "total": 6,
+      "passed": 3
+    },
+    "undo_redo": {
+      "total": 5,
+      "passed": 4
+    },
+    "out_of_range": {
+      "total": 5,
+      "passed": 5
+    },
+    "ambiguous": {
+      "total": 4,
+      "passed": 4
+    }
+  },
+  "results": [
+    {
+      "id": "simple_add_dynamic",
+      "category": "simple",
+      "transcript": "forte at measure 12 beat 1",
+      "passed": true,
+      "detail": "",
+      "expected": {
+        "tool_calls": [
+          {
+            "tool": "add_dynamic",
+            "args": {
+              "measure": 12,
+              "beat": 1,
+              "dynamic": "f"
+            }
+          }
+        ],
+        "ordered": false
+      },
+      "actual_calls": [
+        {
+          "tool": "add_dynamic",
+          "args": {
+            "score_id": "81641f8eff59455a93c99c54de179c96",
+            "measure": 12,
+            "beat": 1,
+            "dynamic": "f"
+          }
+        }
+      ],
+      "confirmation": "Added forte at measure 12, beat 1.",
+      "needs_clarification": false
+    },
+    {
+      "id": "simple_draw_slur",
+      "category": "simple",
+      "transcript": "slur from measure 3 beat 1 to measure 4 beat 2",
+      "passed": true,
+      "detail": "",
+      "expected": {
+        "tool_calls": [
+          {
+            "tool": "draw_slur",
+            "args": {
+              "start_measure": 3,
+              "start_beat": 1,
+              "end_measure": 4,
+              "end_beat": 2
+            }
+          }
+        ],
+        "ordered": false
+      },
+      "actual_calls": [
+        {
+          "tool": "draw_slur",
+          "args": {
+            "score_id": "12cacb452abf4aa79dbf227be4422907",
+            "start_measure": 3,
+            "start_beat": 1,
+            "end_measure": 4,
+            "end_beat": 2
+          }
+        }
+      ],
+      "confirmation": "Slur drawn from measure 3 beat 1 to measure 4 beat 2.",
+      "needs_clarification": false
+    },
+    {
+      "id": "simple_add_articulation",
+      "category": "simple",
+      "transcript": "staccato on beat 2 of measure 5",
+      "passed": true,
+      "detail": "",
+      "expected": {
+        "tool_calls": [
+          {
+            "tool": "add_articulation",
+            "args": {
+              "measure": 5,
+              "beat": 2,
+              "articulation": "staccato"
+            }
+          }
+        ],
+        "ordered": false
+      },
+      "actual_calls": [
+        {
+          "tool": "add_articulation",
+          "args": {
+            "score_id": "e99791ecc20d43edaff6b5276fc45510",
+            "measure": 5,
+            "beat": 2,
+            "articulation": "staccato"
+          }
+        }
+      ],
+      "confirmation": "Added staccato on beat 2 of measure 5.",
+      "needs_clarification": false
+    },
+    {
+      "id": "simple_draw_hairpin",
+      "category": "simple",
+      "transcript": "crescendo from bar 2 beat 1 to bar 3 beat 1",
+      "passed": true,
+      "detail": "",
+      "expected": {
+        "tool_calls": [
+          {
+            "tool": "draw_hairpin",
+            "args": {
+              "start_measure": 2,
+              "start_beat": 1,
+              "end_measure": 3,
+              "end_beat": 1,
+              "direction": "crescendo"
+            }
+          }
+        ],
+        "ordered": false
+      },
+      "actual_calls": [
+        {
+          "tool": "draw_hairpin",
+          "args": {
+            "score_id": "29b2820594ed47a69d5f3a8242432ce9",
+            "start_measure": 2,
+            "start_beat": 1,
+            "end_measure": 3,
+            "end_beat": 1,
+            "direction": "crescendo"
+          }
+        }
+      ],
+      "confirmation": "Crescendo added from bar 2 beat 1 to bar 3 beat 1.",
+      "needs_clarification": false
+    },
+    {
+      "id": "simple_add_text_expression",
+      "category": "simple",
+      "transcript": "write dolce at measure 6 beat 1",
+      "passed": true,
+      "detail": "",
+      "expected": {
+        "tool_calls": [
+          {
+            "tool": "add_text_expression",
+            "args": {
+              "measure": 6,
+              "beat": 1,
+              "text": "dolce"
+            }
+          }
+        ],
+        "ordered": false
+      },
+      "actual_calls": [
+        {
+          "tool": "add_text_expression",
+          "args": {
+            "score_id": "624c319b8acb40f0948f4f4ec95a2396",
+            "measure": 6,
+            "beat": 1,
+            "text": "dolce"
+          }
+        }
+      ],
+      "confirmation": "Added \"dolce\" at measure 6, beat 1.",
+      "needs_clarification": false
+    },
+    {
+      "id": "simple_add_tempo",
+      "category": "simple",
+      "transcript": "quarter equals 120 at measure 1",
+      "passed": true,
+      "detail": "",
+      "expected": {
+        "tool_calls": [
+          {
+            "tool": "add_tempo",
+            "args": {
+              "measure": 1,
+              "bpm": 120
+            }
+          }
+        ],
+        "ordered": false
+      },
+      "actual_calls": [
+        {
+          "tool": "add_tempo",
+          "args": {
+            "score_id": "48109eb19e68498c9bc77f2cff405f89",
+            "measure": 1,
+            "bpm": 120,
+            "unit": "quarter"
+          }
+        }
+      ],
+      "confirmation": "Quarter equals 120 added at measure 1.",
+      "needs_clarification": false
+    },
+    {
+      "id": "simple_add_rehearsal_mark",
+      "category": "simple",
+      "transcript": "rehearsal mark A at measure 10",
+      "passed": true,
+      "detail": "",
+      "expected": {
+        "tool_calls": [
+          {
+            "tool": "add_rehearsal_mark",
+            "args": {
+              "measure": 10,
+              "label": "A"
+            }
+          }
+        ],
+        "ordered": false
+      },
+      "actual_calls": [
+        {
+          "tool": "add_rehearsal_mark",
+          "args": {
+            "score_id": "e44ea9228a0541c88a9de6d53412c8d8",
+            "measure": 10,
+            "label": "A"
+          }
+        }
+      ],
+      "confirmation": "Added rehearsal mark A at measure 10.",
+      "needs_clarification": false
+    },
+    {
+      "id": "simple_add_ornament",
+      "category": "simple",
+      "transcript": "trill on beat 2 of measure 5",
+      "passed": true,
+      "detail": "",
+      "expected": {
+        "tool_calls": [
+          {
+            "tool": "add_ornament",
+            "args": {
+              "measure": 5,
+              "beat": 2,
+              "ornament": "trill"
+            }
+          }
+        ],
+        "ordered": false
+      },
+      "actual_calls": [
+        {
+          "tool": "add_ornament",
+          "args": {
+            "score_id": "98ae9898dc1641c298baea619e8d299a",
+            "measure": 5,
+            "beat": 2,
+            "ornament": "trill"
+          }
+        }
+      ],
+      "confirmation": "Added a trill on beat 2 of measure 5.",
+      "needs_clarification": false
+    },
+    {
+      "id": "simple_remove_notation",
+      "category": "simple",
+      "transcript": "remove the dynamic at measure 12 beat 1",
+      "passed": true,
+      "detail": "",
+      "expected": {
+        "tool_calls": [
+          {
+            "tool": "remove_notation",
+            "args": {
+              "measure": 12,
+              "beat": 1
+            }
+          }
+        ],
+        "ordered": false
+      },
+      "actual_calls": [
+        {
+          "tool": "remove_notation",
+          "args": {
+            "score_id": "28bf1e8199ec435db9637fd3d7f70309",
+            "measure": 12,
+            "beat": 1,
+            "notation_type": "dynamic"
+          }
+        }
+      ],
+      "confirmation": "Removed the forte dynamic at measure 12, beat 1.",
+      "needs_clarification": false
+    },
+    {
+      "id": "simple_undo",
+      "category": "simple",
+      "transcript": "undo that",
+      "passed": true,
+      "detail": "",
+      "expected": {
+        "tool_calls": [
+          {
+            "tool": "undo",
+            "args": {}
+          }
+        ],
+        "ordered": false
+      },
+      "actual_calls": [
+        {
+          "tool": "undo",
+          "args": {
+            "score_id": "43eaa39e191b43a49c93396d4cae00f6"
+          }
+        }
+      ],
+      "confirmation": "Done \u2014 the forte at measure 4 has been removed.",
+      "needs_clarification": false
+    },
+    {
+      "id": "simple_redo",
+      "category": "simple",
+      "transcript": "redo that",
+      "passed": true,
+      "detail": "",
+      "expected": {
+        "tool_calls": [
+          {
+            "tool": "redo",
+            "args": {}
+          }
+        ],
+        "ordered": false
+      },
+      "actual_calls": [
+        {
+          "tool": "redo",
+          "args": {
+            "score_id": "79ac554562a8429eb096d595b3826c71"
+          }
+        }
+      ],
+      "confirmation": "Forte is back at measure 4, beat 1.",
+      "needs_clarification": false
+    },
+    {
+      "id": "syn_bar_for_measure",
+      "category": "synonyms",
+      "transcript": "bar 5 beat 1 mezzo forte",
+      "passed": true,
+      "detail": "",
+      "expected": {
+        "tool_calls": [
+          {
+            "tool": "add_dynamic",
+            "args": {
+              "measure": 5,
+              "beat": 1,
+              "dynamic": "mf"
+            }
+          }
+        ],
+        "ordered": false
+      },
+      "actual_calls": [
+        {
+          "tool": "add_dynamic",
+          "args": {
+            "score_id": "79124dfcc6764ab588a97e4d64b62942",
+            "measure": 5,
+            "beat": 1,
+            "dynamic": "mf"
+          }
+        }
+      ],
+      "confirmation": "Added mezzo forte at measure 5, beat 1.",
+      "needs_clarification": false
+    },
+    {
+      "id": "syn_cresc",
+      "category": "synonyms",
+      "transcript": "cresc from measure 1 beat 1 to measure 2 beat 1",
+      "passed": true,
+      "detail": "",
+      "expected": {
+        "tool_calls": [
+          {
+            "tool": "draw_hairpin",
+            "args": {
+              "start_measure": 1,
+              "start_beat": 1,
+              "end_measure": 2,
+              "end_beat": 1,
+              "direction": "crescendo"
+            }
+          }
+        ],
+        "ordered": false
+      },
+      "actual_calls": [
+        {
+          "tool": "draw_hairpin",
+          "args": {
+            "score_id": "73e915c288c44df5b5226eff8e2d9e9f",
+            "start_measure": 1,
+            "start_beat": 1,
+            "end_measure": 2,
+            "end_beat": 1,
+            "direction": "crescendo"
+          }
+        }
+      ],
+      "confirmation": "Added a crescendo from measure 1 beat 1 to measure 2 beat 1.",
+      "needs_clarification": false
+    },
+    {
+      "id": "syn_dim",
+      "category": "synonyms",
+      "transcript": "dim from measure 5 beat 1 to measure 6 beat 1",
+      "passed": true,
+      "detail": "",
+      "expected": {
+        "any_of": [
+          {
+            "tool_calls": [
+              {
+                "tool": "draw_hairpin",
+                "args": {
+                  "start_measure": 5,
+                  "start_beat": 1,
+                  "end_measure": 6,
+                  "end_beat": 1,
+                  "direction": "decrescendo"
+                }
+              }
+            ],
+            "ordered": false
+          },
+          {
+            "tool_calls": [
+              {
+                "tool": "draw_hairpin",
+                "args": {
+                  "start_measure": 5,
+                  "start_beat": 1,
+                  "end_measure": 6,
+                  "end_beat": 1,
+                  "direction": "diminuendo"
+                }
+              }
+            ],
+            "ordered": false
+          }
+        ]
+      },
+      "actual_calls": [
+        {
+          "tool": "draw_hairpin",
+          "args": {
+            "score_id": "48ed10b7f1f4432cad5638266f64e340",
+            "start_measure": 5,
+            "start_beat": 1,
+            "end_measure": 6,
+            "end_beat": 1,
+            "direction": "decrescendo"
+          }
+        }
+      ],
+      "confirmation": "Decrescendo added from measure 5 beat 1 to measure 6 beat 1.",
+      "needs_clarification": false
+    },
+    {
+      "id": "syn_decresc",
+      "category": "synonyms",
+      "transcript": "decresc from measure 7 beat 1 to measure 8 beat 1",
+      "passed": true,
+      "detail": "",
+      "expected": {
+        "any_of": [
+          {
+            "tool_calls": [
+              {
+                "tool": "draw_hairpin",
+                "args": {
+                  "start_measure": 7,
+                  "start_beat": 1,
+                  "end_measure": 8,
+                  "end_beat": 1,
+                  "direction": "decrescendo"
+                }
+              }
+            ],
+            "ordered": false
+          },
+          {
+            "tool_calls": [
+              {
+                "tool": "draw_hairpin",
+                "args": {
+                  "start_measure": 7,
+                  "start_beat": 1,
+                  "end_measure": 8,
+                  "end_beat": 1,
+                  "direction": "diminuendo"
+                }
+              }
+            ],
+            "ordered": false
+          }
+        ]
+      },
+      "actual_calls": [
+        {
+          "tool": "draw_hairpin",
+          "args": {
+            "score_id": "62caed1a93154abaa694a06c21f6e966",
+            "start_measure": 7,
+            "start_beat": 1,
+            "end_measure": 8,
+            "end_beat": 1,
+            "direction": "decrescendo"
+          }
+        }
+      ],
+      "confirmation": "Decrescendo added from measure 7 beat 1 to measure 8 beat 1.",
+      "needs_clarification": false
+    },
+    {
+      "id": "syn_stacc",
+      "category": "synonyms",
+      "transcript": "stacc on beat 3 of measure 9",
+      "passed": true,
+      "detail": "",
+      "expected": {
+        "tool_calls": [
+          {
+            "tool": "add_articulation",
+            "args": {
+              "measure": 9,
+              "beat": 3,
+              "articulation": "staccato"
+            }
+          }
+        ],
+        "ordered": false
+      },
+      "actual_calls": [
+        {
+          "tool": "add_articulation",
+          "args": {
+            "score_id": "5a797580c5804308889d0cc76adfc96a",
+            "measure": 9,
+            "beat": 3,
+            "articulation": "staccato"
+          }
+        }
+      ],
+      "confirmation": "Added staccato on beat 3 of measure 9.",
+      "needs_clarification": false
+    },
+    {
+      "id": "syn_marc",
+      "category": "synonyms",
+      "transcript": "marc on beat 1 of measure 10",
+      "passed": true,
+      "detail": "",
+      "expected": {
+        "tool_calls": [
+          {
+            "tool": "add_articulation",
+            "args": {
+              "measure": 10,
+              "beat": 1,
+              "articulation": "marcato"
+            }
+          }
+        ],
+        "ordered": false
+      },
+      "actual_calls": [
+        {
+          "tool": "add_articulation",
+          "args": {
+            "score_id": "d859750d69d141a899d6d822773a978f",
+            "measure": 10,
+            "beat": 1,
+            "articulation": "marcato"
+          }
+        }
+      ],
+      "confirmation": "Added marcato on beat 1 of measure 10.",
+      "needs_clarification": false
+    },
+    {
+      "id": "syn_sfz",
+      "category": "synonyms",
+      "transcript": "put an sfz on beat 2 of bar 11",
+      "passed": true,
+      "detail": "",
+      "expected": {
+        "any_of": [
+          {
+            "tool_calls": [
+              {
+                "tool": "add_dynamic",
+                "args": {
+                  "measure": 11,
+                  "beat": 2,
+                  "dynamic": "sfz"
+                }
+              }
+            ],
+            "ordered": false
+          },
+          {
+            "tool_calls": [
+              {
+                "tool": "add_dynamic",
+                "args": {
+                  "measure": 11,
+                  "beat": 2,
+                  "dynamic": "sf"
+                }
+              }
+            ],
+            "ordered": false
+          }
+        ]
+      },
+      "actual_calls": [
+        {
+          "tool": "add_dynamic",
+          "args": {
+            "score_id": "bf6e3ff608644277b37b832d776247c1",
+            "measure": 11,
+            "beat": 2,
+            "dynamic": "sfz"
+          }
+        }
+      ],
+      "confirmation": "Added sfz at beat 2 of measure 11.",
+      "needs_clarification": false
+    },
+    {
+      "id": "rng_staccato_bars_8_12",
+      "category": "ranges",
+      "transcript": "staccato on every note from bars 8 to 12",
+      "passed": true,
+      "detail": "",
+      "expected": {
+        "tool_calls": [
+          {
+            "tool": "add_articulation",
+            "args": {
+              "measure": 8,
+              "beat": 1,
+              "end_measure": 12,
+              "articulation": "staccato"
+            }
+          }
+        ],
+        "ordered": false
+      },
+      "actual_calls": [
+        {
+          "tool": "add_articulation",
+          "args": {
+            "score_id": "1797aaed5ffb438988ac314a15287d3e",
+            "measure": 8,
+            "beat": 1,
+            "articulation": "staccato",
+            "end_measure": 12,
+            "end_beat": 4
+          }
+        }
+      ],
+      "confirmation": "Staccato added to all 20 notes across bars 8 through 12.",
+      "needs_clarification": false
+    },
+    {
+      "id": "rng_accent_measures_3_4",
+      "category": "ranges",
+      "transcript": "accent every note in measures 3 through 4",
+      "passed": true,
+      "detail": "",
+      "expected": {
+        "tool_calls": [
+          {
+            "tool": "add_articulation",
+            "args": {
+              "measure": 3,
+              "beat": 1,
+              "end_measure": 4,
+              "articulation": "accent"
+            }
+          }
+        ],
+        "ordered": false
+      },
+      "actual_calls": [
+        {
+          "tool": "add_articulation",
+          "args": {
+            "score_id": "957f2e029b37482aa9ef9a874e7add28",
+            "measure": 3,
+            "beat": 1,
+            "articulation": "accent",
+            "end_measure": 4,
+            "end_beat": 4
+          }
+        }
+      ],
+      "confirmation": "Accents added to all 8 notes across measures 3 and 4.",
+      "needs_clarification": false
+    },
+    {
+      "id": "rng_down_bow_6_7",
+      "category": "ranges",
+      "transcript": "down bow from measure 6 to measure 7",
+      "passed": true,
+      "detail": "",
+      "expected": {
+        "tool_calls": [
+          {
+            "tool": "add_articulation",
+            "args": {
+              "measure": 6,
+              "beat": 1,
+              "end_measure": 7,
+              "articulation": "down_bow"
+            }
+          }
+        ],
+        "ordered": false
+      },
+      "actual_calls": [
+        {
+          "tool": "add_articulation",
+          "args": {
+            "score_id": "9ad3754c5b164c4da556ba7f2e553f0a",
+            "measure": 6,
+            "beat": 1,
+            "articulation": "down_bow",
+            "end_measure": 7,
+            "end_beat": 4
+          }
+        }
+      ],
+      "confirmation": "Added down bow to all notes from measure 6 through measure 7.",
+      "needs_clarification": false
+    },
+    {
+      "id": "rng_tenuto_within_measure",
+      "category": "ranges",
+      "transcript": "tenuto on every note from beat 2 of measure 9 to beat 4 of measure 9",
+      "passed": true,
+      "detail": "",
+      "expected": {
+        "tool_calls": [
+          {
+            "tool": "add_articulation",
+            "args": {
+              "measure": 9,
+              "beat": 2,
+              "end_measure": 9,
+              "end_beat": 4,
+              "articulation": "tenuto"
+            }
+          }
+        ],
+        "ordered": false
+      },
+      "actual_calls": [
+        {
+          "tool": "add_articulation",
+          "args": {
+            "score_id": "37b8e02230a04849a66e90b86a0c2ef8",
+            "measure": 9,
+            "beat": 2,
+            "end_measure": 9,
+            "end_beat": 4,
+            "articulation": "tenuto"
+          }
+        }
+      ],
+      "confirmation": "Tenuto added to all notes from beat 2 to beat 4 of measure 9.",
+      "needs_clarification": false
+    },
+    {
+      "id": "rng_up_bow_14_15",
+      "category": "ranges",
+      "transcript": "up bow on all notes from measures 14 to 15",
+      "passed": true,
+      "detail": "",
+      "expected": {
+        "tool_calls": [
+          {
+            "tool": "add_articulation",
+            "args": {
+              "measure": 14,
+              "beat": 1,
+              "end_measure": 15,
+              "articulation": "up_bow"
+            }
+          }
+        ],
+        "ordered": false
+      },
+      "actual_calls": [
+        {
+          "tool": "add_articulation",
+          "args": {
+            "score_id": "7e46f464fb0948dd8404c0037c06e202",
+            "measure": 14,
+            "beat": 1,
+            "end_measure": 15,
+            "end_beat": 4,
+            "articulation": "up_bow",
+            "part": "Violin"
+          }
+        }
+      ],
+      "confirmation": "Up bow added to all 8 notes across measures 14 and 15.",
+      "needs_clarification": false
+    },
+    {
+      "id": "cmp_dynamic_and_articulation",
+      "category": "compound",
+      "transcript": "forte at measure 3 beat 1 and staccato on beat 2 of measure 3",
+      "passed": true,
+      "detail": "",
+      "expected": {
+        "tool_calls": [
+          {
+            "tool": "add_dynamic",
+            "args": {
+              "measure": 3,
+              "beat": 1,
+              "dynamic": "f"
+            }
+          },
+          {
+            "tool": "add_articulation",
+            "args": {
+              "measure": 3,
+              "beat": 2,
+              "articulation": "staccato"
+            }
+          }
+        ],
+        "ordered": false
+      },
+      "actual_calls": [
+        {
+          "tool": "add_dynamic",
+          "args": {
+            "score_id": "ca49652d79ae454fa29f664a9e66db78",
+            "measure": 3,
+            "beat": 1,
+            "dynamic": "f"
+          }
+        },
+        {
+          "tool": "add_articulation",
+          "args": {
+            "score_id": "ca49652d79ae454fa29f664a9e66db78",
+            "measure": 3,
+            "beat": 2,
+            "articulation": "staccato"
+          }
+        }
+      ],
+      "confirmation": "Done! Added forte at measure 3 beat 1 and staccato at measure 3 beat 2.",
+      "needs_clarification": false
+    },
+    {
+      "id": "cmp_two_dynamics",
+      "category": "compound",
+      "transcript": "piano at measure 5 beat 1 and mezzo forte at measure 6 beat 1",
+      "passed": true,
+      "detail": "",
+      "expected": {
+        "tool_calls": [
+          {
+            "tool": "add_dynamic",
+            "args": {
+              "measure": 5,
+              "beat": 1,
+              "dynamic": "p"
+            }
+          },
+          {
+            "tool": "add_dynamic",
+            "args": {
+              "measure": 6,
+              "beat": 1,
+              "dynamic": "mf"
+            }
+          }
+        ],
+        "ordered": false
+      },
+      "actual_calls": [
+        {
+          "tool": "add_dynamic",
+          "args": {
+            "score_id": "247f78ad9a824e8186661278222d24ce",
+            "measure": 5,
+            "beat": 1,
+            "dynamic": "p"
+          }
+        },
+        {
+          "tool": "add_dynamic",
+          "args": {
+            "score_id": "247f78ad9a824e8186661278222d24ce",
+            "measure": 6,
+            "beat": 1,
+            "dynamic": "mf"
+          }
+        }
+      ],
+      "confirmation": "Done! Added piano at measure 5 beat 1 and mezzo forte at measure 6 beat 1.",
+      "needs_clarification": false
+    },
+    {
+      "id": "cmp_two_ornaments",
+      "category": "compound",
+      "transcript": "add a trill on beat 1 of measure 7 and a fermata on beat 3 of measure 7",
+      "passed": true,
+      "detail": "",
+      "expected": {
+        "tool_calls": [
+          {
+            "tool": "add_ornament",
+            "args": {
+              "measure": 7,
+              "beat": 1,
+              "ornament": "trill"
+            }
+          },
+          {
+            "tool": "add_ornament",
+            "args": {
+              "measure": 7,
+              "beat": 3,
+              "ornament": "fermata"
+            }
+          }
+        ],
+        "ordered": false
+      },
+      "actual_calls": [
+        {
+          "tool": "add_ornament",
+          "args": {
+            "score_id": "0f6fa2f9a1024244b9f85391bfb745a0",
+            "measure": 7,
+            "beat": 1,
+            "ornament": "trill"
+          }
+        },
+        {
+          "tool": "add_ornament",
+          "args": {
+            "score_id": "0f6fa2f9a1024244b9f85391bfb745a0",
+            "measure": 7,
+            "beat": 3,
+            "ornament": "fermata"
+          }
+        }
+      ],
+      "confirmation": "Done! Added a trill on beat 1 and a fermata on beat 3, both in measure 7.",
+      "needs_clarification": false
+    },
+    {
+      "id": "cmp_slur_and_text",
+      "category": "compound",
+      "transcript": "slur from measure 2 beat 1 to measure 3 beat 1 and add dolce at measure 2 beat 1",
+      "passed": true,
+      "detail": "",
+      "expected": {
+        "tool_calls": [
+          {
+            "tool": "draw_slur",
+            "args": {
+              "start_measure": 2,
+              "start_beat": 1,
+              "end_measure": 3,
+              "end_beat": 1
+            }
+          },
+          {
+            "tool": "add_text_expression",
+            "args": {
+              "measure": 2,
+              "beat": 1,
+              "text": "dolce"
+            }
+          }
+        ],
+        "ordered": false
+      },
+      "actual_calls": [
+        {
+          "tool": "draw_slur",
+          "args": {
+            "score_id": "929343b2c6af46e9941224b569e0b83e",
+            "start_measure": 2,
+            "start_beat": 1,
+            "end_measure": 3,
+            "end_beat": 1
+          }
+        },
+        {
+          "tool": "add_text_expression",
+          "args": {
+            "score_id": "929343b2c6af46e9941224b569e0b83e",
+            "measure": 2,
+            "beat": 1,
+            "text": "dolce"
+          }
+        }
+      ],
+      "confirmation": "Done! Added a slur from measure 2 beat 1 to measure 3 beat 1, and \"dolce\" at measure 2 beat 1.",
+      "needs_clarification": false
+    },
+    {
+      "id": "cmp_rehearsal_and_dynamic",
+      "category": "compound",
+      "transcript": "rehearsal mark B at measure 9 and forte at measure 9 beat 1",
+      "passed": true,
+      "detail": "",
+      "expected": {
+        "tool_calls": [
+          {
+            "tool": "add_rehearsal_mark",
+            "args": {
+              "measure": 9,
+              "label": "B"
+            }
+          },
+          {
+            "tool": "add_dynamic",
+            "args": {
+              "measure": 9,
+              "beat": 1,
+              "dynamic": "f"
+            }
+          }
+        ],
+        "ordered": false
+      },
+      "actual_calls": [
+        {
+          "tool": "add_rehearsal_mark",
+          "args": {
+            "score_id": "3cb8464989de41b08093c7255c977425",
+            "measure": 9,
+            "label": "B"
+          }
+        },
+        {
+          "tool": "add_dynamic",
+          "args": {
+            "score_id": "3cb8464989de41b08093c7255c977425",
+            "measure": 9,
+            "beat": 1,
+            "dynamic": "f"
+          }
+        }
+      ],
+      "confirmation": "Done! Added rehearsal mark B and forte at measure 9, beat 1.",
+      "needs_clarification": false
+    },
+    {
+      "id": "cmp_hairpin_and_articulation",
+      "category": "compound",
+      "transcript": "crescendo from measure 10 beat 1 to measure 11 beat 1 and accent on beat 1 of measure 10",
+      "passed": true,
+      "detail": "",
+      "expected": {
+        "tool_calls": [
+          {
+            "tool": "draw_hairpin",
+            "args": {
+              "start_measure": 10,
+              "start_beat": 1,
+              "end_measure": 11,
+              "end_beat": 1,
+              "direction": "crescendo"
+            }
+          },
+          {
+            "tool": "add_articulation",
+            "args": {
+              "measure": 10,
+              "beat": 1,
+              "articulation": "accent"
+            }
+          }
+        ],
+        "ordered": false
+      },
+      "actual_calls": [
+        {
+          "tool": "draw_hairpin",
+          "args": {
+            "score_id": "c88b192364474de29c6912283540267a",
+            "start_measure": 10,
+            "start_beat": 1,
+            "end_measure": 11,
+            "end_beat": 1,
+            "direction": "crescendo"
+          }
+        },
+        {
+          "tool": "add_articulation",
+          "args": {
+            "score_id": "c88b192364474de29c6912283540267a",
+            "measure": 10,
+            "beat": 1,
+            "articulation": "accent"
+          }
+        }
+      ],
+      "confirmation": "Done! Added a crescendo from measure 10 beat 1 to measure 11 beat 1, and an accent on beat 1 of measure 10.",
+      "needs_clarification": false
+    },
+    {
+      "id": "art_for_tay",
+      "category": "transcription_artifacts",
+      "transcript": "add a for tay at measure twelve beat one",
+      "passed": false,
+      "detail": "no assignment of actual calls [{'tool': 'add_dynamic', 'args': {'score_id': 'be3f9a19f0e345e4be981d87633aa937', 'measure': 12, 'beat': 1, 'dynamic': 'fp'}}] matches expected [{'tool': 'add_dynamic', 'args': {'measure': 12, 'beat': 1, 'dynamic': 'f'}}]",
+      "expected": {
+        "tool_calls": [
+          {
+            "tool": "add_dynamic",
+            "args": {
+              "measure": 12,
+              "beat": 1,
+              "dynamic": "f"
+            }
+          }
+        ],
+        "ordered": false
+      },
+      "actual_calls": [
+        {
+          "tool": "add_dynamic",
+          "args": {
+            "score_id": "be3f9a19f0e345e4be981d87633aa937",
+            "measure": 12,
+            "beat": 1,
+            "dynamic": "fp"
+          }
+        }
+      ],
+      "confirmation": "Added *fp* (forte-piano) at measure 12, beat 1.",
+      "needs_clarification": false
+    },
+    {
+      "id": "art_sforzando",
+      "category": "transcription_artifacts",
+      "transcript": "sfor zando on beat 2 of measure 4",
+      "passed": true,
+      "detail": "",
+      "expected": {
+        "any_of": [
+          {
+            "tool_calls": [
+              {
+                "tool": "add_dynamic",
+                "args": {
+                  "measure": 4,
+                  "beat": 2,
+                  "dynamic": "sfz"
+                }
+              }
+            ],
+            "ordered": false
+          },
+          {
+            "tool_calls": [
+              {
+                "tool": "add_dynamic",
+                "args": {
+                  "measure": 4,
+                  "beat": 2,
+                  "dynamic": "sf"
+                }
+              }
+            ],
+            "ordered": false
+          }
+        ]
+      },
+      "actual_calls": [
+        {
+          "tool": "add_dynamic",
+          "args": {
+            "score_id": "36088054b50b4208b95e6cfbe893fc0f",
+            "measure": 4,
+            "beat": 2,
+            "dynamic": "sfz"
+          }
+        }
+      ],
+      "confirmation": "Added sforzando at beat 2 of measure 4.",
+      "needs_clarification": false
+    },
+    {
+      "id": "art_measure_to",
+      "category": "transcription_artifacts",
+      "transcript": "measure to beat one forte",
+      "passed": true,
+      "detail": "",
+      "expected": {
+        "tool_calls": [
+          {
+            "tool": "add_dynamic",
+            "args": {
+              "measure": 2,
+              "beat": 1,
+              "dynamic": "f"
+            }
+          }
+        ],
+        "ordered": false
+      },
+      "actual_calls": [
+        {
+          "tool": "add_dynamic",
+          "args": {
+            "score_id": "03f13433ddb54904acb9318280ff4c61",
+            "measure": 2,
+            "beat": 1,
+            "dynamic": "f"
+          }
+        }
+      ],
+      "confirmation": "Added forte at measure 2, beat 1.",
+      "needs_clarification": false
+    },
+    {
+      "id": "art_mets_a_forte",
+      "category": "transcription_artifacts",
+      "transcript": "mets a forte at measure eight beat one",
+      "passed": false,
+      "detail": "expected 1 tool call(s), got 2: ['add_articulation', 'add_dynamic']",
+      "expected": {
+        "tool_calls": [
+          {
+            "tool": "add_dynamic",
+            "args": {
+              "measure": 8,
+              "beat": 1,
+              "dynamic": "f"
+            }
+          }
+        ],
+        "ordered": false
+      },
+      "actual_calls": [
+        {
+          "tool": "add_articulation",
+          "args": {
+            "score_id": "6f74bc6bf0c744bca1dcebbdc022f2a1",
+            "measure": 8,
+            "beat": 1,
+            "articulation": "marcato"
+          }
+        },
+        {
+          "tool": "add_dynamic",
+          "args": {
+            "score_id": "6f74bc6bf0c744bca1dcebbdc022f2a1",
+            "measure": 8,
+            "beat": 1,
+            "dynamic": "f"
+          }
+        }
+      ],
+      "confirmation": "Added marcato and forte at measure 8, beat 1.",
+      "needs_clarification": false
+    },
+    {
+      "id": "art_beat_free",
+      "category": "transcription_artifacts",
+      "transcript": "staccato on beat free of measure five",
+      "passed": false,
+      "detail": "expected 1 tool call(s), got 0: []",
+      "expected": {
+        "tool_calls": [
+          {
+            "tool": "add_articulation",
+            "args": {
+              "measure": 5,
+              "beat": 3,
+              "articulation": "staccato"
+            }
+          }
+        ],
+        "ordered": false
+      },
+      "actual_calls": [],
+      "confirmation": "\"Beat free\" \u2014 that sounds like speech-to-text for **beat 3**. Is that right, or did you mean a different beat?",
+      "needs_clarification": true
+    },
+    {
+      "id": "art_measure_won",
+      "category": "transcription_artifacts",
+      "transcript": "put a piano at measure won beat one",
+      "passed": true,
+      "detail": "",
+      "expected": {
+        "tool_calls": [
+          {
+            "tool": "add_dynamic",
+            "args": {
+              "measure": 1,
+              "beat": 1,
+              "dynamic": "p"
+            }
+          }
+        ],
+        "ordered": false
+      },
+      "actual_calls": [
+        {
+          "tool": "add_dynamic",
+          "args": {
+            "score_id": "82212f90f5c741b0ac58a908ea4a635a",
+            "measure": 1,
+            "beat": 1,
+            "dynamic": "p"
+          }
+        }
+      ],
+      "confirmation": "Added piano at measure 1, beat 1.",
+      "needs_clarification": false
+    },
+    {
+      "id": "art_measure_for",
+      "category": "transcription_artifacts",
+      "transcript": "crescendo hairpin from measure for beat one to measure five beat one",
+      "passed": true,
+      "detail": "",
+      "expected": {
+        "tool_calls": [
+          {
+            "tool": "draw_hairpin",
+            "args": {
+              "start_measure": 4,
+              "start_beat": 1,
+              "end_measure": 5,
+              "end_beat": 1,
+              "direction": "crescendo"
+            }
+          }
+        ],
+        "ordered": false
+      },
+      "actual_calls": [
+        {
+          "tool": "draw_hairpin",
+          "args": {
+            "score_id": "1a3b8418668246e0a0efd236875639da",
+            "start_measure": 4,
+            "start_beat": 1,
+            "end_measure": 5,
+            "end_beat": 1,
+            "direction": "crescendo"
+          }
+        }
+      ],
+      "confirmation": "Crescendo hairpin added from measure 4 beat 1 to measure 5 beat 1.",
+      "needs_clarification": false
+    },
+    {
+      "id": "art_beat_too",
+      "category": "transcription_artifacts",
+      "transcript": "trill on beat too of measure six",
+      "passed": true,
+      "detail": "",
+      "expected": {
+        "tool_calls": [
+          {
+            "tool": "add_ornament",
+            "args": {
+              "measure": 6,
+              "beat": 2,
+              "ornament": "trill"
+            }
+          }
+        ],
+        "ordered": false
+      },
+      "actual_calls": [
+        {
+          "tool": "add_ornament",
+          "args": {
+            "score_id": "ec18c4b3f95249b785c9d158aa50e210",
+            "measure": 6,
+            "beat": 2,
+            "ornament": "trill"
+          }
+        }
+      ],
+      "confirmation": "Added a trill on beat 2 of measure 6.",
+      "needs_clarification": false
+    },
+    {
+      "id": "art_rehearsal_sea",
+      "category": "transcription_artifacts",
+      "transcript": "add a rehearsal mark sea at measure fourteen",
+      "passed": false,
+      "detail": "no assignment of actual calls [{'tool': 'add_rehearsal_mark', 'args': {'score_id': 'bc104e110d584a9da51bfc710c0c9661', 'measure': 14, 'label': 'Sea'}}] matches expected [{'tool': 'add_rehearsal_mark', 'args': {'measure': 14, 'label': 'C'}}]",
+      "expected": {
+        "tool_calls": [
+          {
+            "tool": "add_rehearsal_mark",
+            "args": {
+              "measure": 14,
+              "label": "C"
+            }
+          }
+        ],
+        "ordered": false
+      },
+      "actual_calls": [
+        {
+          "tool": "add_rehearsal_mark",
+          "args": {
+            "score_id": "bc104e110d584a9da51bfc710c0c9661",
+            "measure": 14,
+            "label": "Sea"
+          }
+        }
+      ],
+      "confirmation": "Added rehearsal mark \"Sea\" at measure 14.",
+      "needs_clarification": false
+    },
+    {
+      "id": "ctx_same_thing_measure",
+      "category": "context_carryover",
+      "transcript": "same thing at measure 15",
+      "passed": false,
+      "detail": "expected 1 tool call(s), got 2: ['add_dynamic', 'add_dynamic']",
+      "expected": {
+        "tool_calls": [
+          {
+            "tool": "add_dynamic",
+            "args": {
+              "measure": 15,
+              "beat": 1,
+              "dynamic": "f"
+            }
+          }
+        ],
+        "ordered": false
+      },
+      "actual_calls": [
+        {
+          "tool": "add_dynamic",
+          "args": {
+            "score_id": "04ebbc6c03324da482391d80bea11ed9",
+            "measure": 2,
+            "beat": 1,
+            "dynamic": "f"
+          }
+        },
+        {
+          "tool": "add_dynamic",
+          "args": {
+            "score_id": "04ebbc6c03324da482391d80bea11ed9",
+            "measure": 15,
+            "beat": 1,
+            "dynamic": "f"
+          }
+        }
+      ],
+      "confirmation": "Added forte at measure 15, beat 1.",
+      "needs_clarification": false
+    },
+    {
+      "id": "ctx_beat_only_repeat",
+      "category": "context_carryover",
+      "transcript": "do that again on beat 3",
+      "passed": false,
+      "detail": "expected 1 tool call(s), got 2: ['add_articulation', 'add_articulation']",
+      "expected": {
+        "tool_calls": [
+          {
+            "tool": "add_articulation",
+            "args": {
+              "measure": 4,
+              "beat": 3,
+              "articulation": "staccato"
+            }
+          }
+        ],
+        "ordered": false
+      },
+      "actual_calls": [
+        {
+          "tool": "add_articulation",
+          "args": {
+            "score_id": "da55f5d07a4744008a91bacf3ce542a2",
+            "measure": 4,
+            "beat": 1,
+            "articulation": "staccato"
+          }
+        },
+        {
+          "tool": "add_articulation",
+          "args": {
+            "score_id": "da55f5d07a4744008a91bacf3ce542a2",
+            "measure": 4,
+            "beat": 3,
+            "articulation": "staccato"
+          }
+        }
+      ],
+      "confirmation": "Added staccato on beat 3 of measure 4.",
+      "needs_clarification": false
+    },
+    {
+      "id": "ctx_same_crescendo",
+      "category": "context_carryover",
+      "transcript": "now do the same crescendo from measure 9 beat 1 to measure 10 beat 1",
+      "passed": true,
+      "detail": "",
+      "expected": {
+        "tool_calls": [
+          {
+            "tool": "draw_hairpin",
+            "args": {
+              "start_measure": 9,
+              "start_beat": 1,
+              "end_measure": 10,
+              "end_beat": 1,
+              "direction": "crescendo"
+            }
+          }
+        ],
+        "ordered": false
+      },
+      "actual_calls": [
+        {
+          "tool": "draw_hairpin",
+          "args": {
+            "score_id": "b6bbc8e1334142eaa4fd07679a87cf66",
+            "start_measure": 9,
+            "start_beat": 1,
+            "end_measure": 10,
+            "end_beat": 1,
+            "direction": "crescendo"
+          }
+        }
+      ],
+      "confirmation": "Crescendo added from measure 9 beat 1 to measure 10 beat 1.",
+      "needs_clarification": false
+    },
+    {
+      "id": "ctx_beat_only_no_marking",
+      "category": "context_carryover",
+      "transcript": "beat 3",
+      "passed": false,
+      "detail": "no assignment of actual calls [{'tool': 'add_dynamic', 'args': {'score_id': 'e6ce4176a6d84e97abab094fb1b06ca9', 'measure': 7, 'beat': 1, 'dynamic': 'mp'}}] matches expected [{'tool': 'add_dynamic', 'args': {'measure': 7, 'beat': 3, 'dynamic': 'mp'}}]",
+      "expected": {
+        "tool_calls": [
+          {
+            "tool": "add_dynamic",
+            "args": {
+              "measure": 7,
+              "beat": 3,
+              "dynamic": "mp"
+            }
+          }
+        ],
+        "ordered": false
+      },
+      "actual_calls": [
+        {
+          "tool": "add_dynamic",
+          "args": {
+            "score_id": "e6ce4176a6d84e97abab094fb1b06ca9",
+            "measure": 7,
+            "beat": 1,
+            "dynamic": "mp"
+          }
+        }
+      ],
+      "confirmation": "It looks like I still need to add the marking at beat 3. But wait \u2014 you said \"beat 3\" without specifying a new dynamic. Should I add **mezzo piano** at measure 7, beat 3 as well, or did you have a different marking in mind?",
+      "needs_clarification": false
+    },
+    {
+      "id": "ctx_ornament_beat_only",
+      "category": "context_carryover",
+      "transcript": "also add one on beat 3",
+      "passed": true,
+      "detail": "",
+      "expected": {
+        "tool_calls": [
+          {
+            "tool": "add_ornament",
+            "args": {
+              "measure": 8,
+              "beat": 3,
+              "ornament": "trill"
+            }
+          }
+        ],
+        "ordered": false
+      },
+      "actual_calls": [
+        {
+          "tool": "add_ornament",
+          "args": {
+            "score_id": "7c2c8a5799274b33a3204e5275955f74",
+            "measure": 8,
+            "beat": 3,
+            "ornament": "trill"
+          }
+        }
+      ],
+      "confirmation": "Added a trill on beat 3 of measure 8 as well.",
+      "needs_clarification": false
+    },
+    {
+      "id": "ctx_deep_chain_beat_only",
+      "category": "context_carryover",
+      "transcript": "beat 4",
+      "passed": true,
+      "detail": "",
+      "expected": {
+        "tool_calls": [
+          {
+            "tool": "add_articulation",
+            "args": {
+              "measure": 12,
+              "beat": 4,
+              "articulation": "staccato"
+            }
+          }
+        ],
+        "ordered": false
+      },
+      "actual_calls": [
+        {
+          "tool": "add_articulation",
+          "args": {
+            "score_id": "7e35240b3d084cd386bc473b367826a5",
+            "measure": 12,
+            "beat": 4,
+            "articulation": "staccato"
+          }
+        }
+      ],
+      "confirmation": "Staccato added on beat 4 of measure 12.",
+      "needs_clarification": false
+    },
+    {
+      "id": "undo_go_back",
+      "category": "undo_redo",
+      "transcript": "go back",
+      "passed": true,
+      "detail": "",
+      "expected": {
+        "tool_calls": [
+          {
+            "tool": "undo",
+            "args": {}
+          }
+        ],
+        "ordered": false
+      },
+      "actual_calls": [
+        {
+          "tool": "undo",
+          "args": {
+            "score_id": "d74a4928e066483cafda5450d7ca7d28"
+          }
+        }
+      ],
+      "confirmation": "Done \u2014 the forte at measure 1 beat 1 has been removed.",
+      "needs_clarification": false
+    },
+    {
+      "id": "undo_never_mind",
+      "category": "undo_redo",
+      "transcript": "never mind",
+      "passed": true,
+      "detail": "",
+      "expected": {
+        "tool_calls": [
+          {
+            "tool": "undo",
+            "args": {}
+          }
+        ],
+        "ordered": false
+      },
+      "actual_calls": [
+        {
+          "tool": "undo",
+          "args": {
+            "score_id": "d4561d0ee7e941b48ebaa2e0f8d72796"
+          }
+        }
+      ],
+      "confirmation": "Done \u2014 the forte at measure 1 has been removed.",
+      "needs_clarification": false
+    },
+    {
+      "id": "undo_put_that_back",
+      "category": "undo_redo",
+      "transcript": "put that back",
+      "passed": true,
+      "detail": "",
+      "expected": {
+        "tool_calls": [
+          {
+            "tool": "redo",
+            "args": {}
+          }
+        ],
+        "ordered": false
+      },
+      "actual_calls": [
+        {
+          "tool": "redo",
+          "args": {
+            "score_id": "c380cab821b04a78b44f35dabff4cac9"
+          }
+        }
+      ],
+      "confirmation": "Forte at measure 1, beat 1 is back!",
+      "needs_clarification": false
+    },
+    {
+      "id": "undo_bare_undo",
+      "category": "undo_redo",
+      "transcript": "undo",
+      "passed": false,
+      "detail": "expected 1 tool call(s), got 2: ['add_dynamic', 'undo']",
+      "expected": {
+        "tool_calls": [
+          {
+            "tool": "undo",
+            "args": {}
+          }
+        ],
+        "ordered": false
+      },
+      "actual_calls": [
+        {
+          "tool": "add_dynamic",
+          "args": {
+            "score_id": "c7c081313c674630bdf5422a95cfcb57",
+            "measure": 2,
+            "beat": 1,
+            "dynamic": "p"
+          }
+        },
+        {
+          "tool": "undo",
+          "args": {
+            "score_id": "c7c081313c674630bdf5422a95cfcb57"
+          }
+        }
+      ],
+      "confirmation": "Undone \u2014 the piano marking at measure 2, beat 1 has been removed.",
+      "needs_clarification": false
+    },
+    {
+      "id": "undo_nothing_to_undo",
+      "category": "undo_redo",
+      "transcript": "undo that",
+      "passed": true,
+      "detail": "",
+      "expected": {
+        "tool_calls": [
+          {
+            "tool": "undo",
+            "args": {}
+          }
+        ],
+        "ordered": false
+      },
+      "actual_calls": [
+        {
+          "tool": "undo",
+          "args": {
+            "score_id": "a4f73e27df774f53a12c437c0c90a1a5"
+          }
+        }
+      ],
+      "confirmation": "There's nothing to undo \u2014 the score hasn't been changed yet!",
+      "needs_clarification": false
+    },
+    {
+      "id": "oor_measure_200",
+      "category": "out_of_range",
+      "transcript": "fortissimo at measure 200",
+      "passed": true,
+      "detail": "",
+      "expected": {
+        "no_tools": true,
+        "expect_clarification_or_correction": true
+      },
+      "actual_calls": [],
+      "confirmation": "Measure 200 is outside the range of this score, which only has 16 measures. Please double-check the measure number \u2014 did you mean a different measure?",
+      "needs_clarification": true
+    },
+    {
+      "id": "oor_slur_out_of_range",
+      "category": "out_of_range",
+      "transcript": "add a slur from measure 25 beat 1 to measure 26 beat 1",
+      "passed": true,
+      "detail": "",
+      "expected": {
+        "no_tools": true,
+        "expect_clarification_or_correction": true
+      },
+      "actual_calls": [],
+      "confirmation": "Measure 25 is outside the range of this score, which only has 16 measures. Could you double-check the measure numbers? Perhaps you meant measures 5 and 6, or another range within measures 1\u201316?",
+      "needs_clarification": true
+    },
+    {
+      "id": "oor_rehearsal_measure_50",
+      "category": "out_of_range",
+      "transcript": "rehearsal mark Z at measure 50",
+      "passed": true,
+      "detail": "",
+      "expected": {
+        "no_tools": true,
+        "expect_clarification_or_correction": true
+      },
+      "actual_calls": [],
+      "confirmation": "Measure 50 is outside this score's range \u2014 it only has 16 measures. Could you double-check the measure number?",
+      "needs_clarification": true
+    },
+    {
+      "id": "oor_hairpin_endpoint",
+      "category": "out_of_range",
+      "transcript": "crescendo from measure 16 beat 1 to measure 30 beat 1",
+      "passed": true,
+      "detail": "",
+      "expected": {
+        "no_tools": true,
+        "expect_clarification_or_correction": true
+      },
+      "actual_calls": [],
+      "confirmation": "Measure 30 is outside this score's range \u2014 the piece only has 16 measures. The crescendo can end no later than measure 16. Would you like the crescendo to run from measure 16, beat 1 to beat 4 instead, or did you have a different ending point in mind?",
+      "needs_clarification": true
+    },
+    {
+      "id": "oor_staccato_measure_99",
+      "category": "out_of_range",
+      "transcript": "staccato at measure 99 beat 1",
+      "passed": true,
+      "detail": "",
+      "expected": {
+        "no_tools": true,
+        "expect_clarification_or_correction": true
+      },
+      "actual_calls": [],
+      "confirmation": "Measure 99 is outside the range of this score, which only has 16 measures. Could you double-check the measure number?",
+      "needs_clarification": true
+    },
+    {
+      "id": "amb_make_it_louder",
+      "category": "ambiguous",
+      "transcript": "make it louder",
+      "passed": true,
+      "detail": "",
+      "expected": {
+        "no_tools": true,
+        "expect_clarification_or_correction": true
+      },
+      "actual_calls": [],
+      "confirmation": "I'd be happy to make it louder! Could you clarify a couple of things:\n\n1. **Where?** Which measure (or range of measures) should the change apply to?\n2. **How loud?** Should I add a specific dynamic marking like **mf**, **f**, or **ff**? Or would you like a **crescendo** hairpin leading to a louder dynamic?",
+      "needs_clarification": true
+    },
+    {
+      "id": "amb_add_accent_no_location",
+      "category": "ambiguous",
+      "transcript": "add an accent",
+      "passed": true,
+      "detail": "",
+      "expected": {
+        "no_tools": true,
+        "expect_clarification_or_correction": true
+      },
+      "actual_calls": [],
+      "confirmation": "I'd be happy to add an accent! Could you specify which **measure** (and beat, if you know it) you'd like the accent placed on?",
+      "needs_clarification": true
+    },
+    {
+      "id": "amb_slur_there",
+      "category": "ambiguous",
+      "transcript": "put a slur there",
+      "passed": true,
+      "detail": "",
+      "expected": {
+        "no_tools": true,
+        "expect_clarification_or_correction": true
+      },
+      "actual_calls": [],
+      "confirmation": "I'd be happy to add a slur, but I need a little more information. Could you specify:\n\n1. **Where it starts** \u2014 measure and beat?\n2. **Where it ends** \u2014 measure and beat?\n\nFor example: \"Put a slur from measure 3 beat 1 to measure 4 beat 2.\"",
+      "needs_clarification": true
+    },
+    {
+      "id": "amb_change_tempo",
+      "category": "ambiguous",
+      "transcript": "change the tempo",
+      "passed": true,
+      "detail": "",
+      "expected": {
+        "no_tools": true,
+        "expect_clarification_or_correction": true
+      },
+      "actual_calls": [],
+      "confirmation": "I'd be happy to change the tempo! Could you provide a little more detail:\n\n1. **Which measure** should the tempo change apply to?\n2. **What tempo** \u2014 a BPM number, a text marking (e.g. \"Allegro\", \"Andante\"), or both?",
+      "needs_clarification": true
+    }
+  ]
+}

@@ -22,6 +22,7 @@ from nota import db as db_module
 from nota import models, storage
 
 from .musicxml_builders import FIXTURE_BUILDERS
+from .real_score_builders import REAL_SCORE_BUILDERS
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
@@ -42,19 +43,20 @@ except ImportError:
 requires_verovio = pytest.mark.skipif(not VEROVIO_AVAILABLE, reason="verovio is not installed")
 
 
-@pytest.fixture(scope="session")
-def fixture_xml_cache() -> dict[str, FixtureInfo]:
-    """Build every fixture score once per test session and write it to
+def _build_fixture_cache(builders: dict) -> dict[str, "FixtureInfo"]:
+    """Build every score in `builders` and write it to
     `tests/tools/fixtures/<name>.musicxml`, returning {name: FixtureInfo}.
 
     Measure count / pickup metadata is computed directly from the
     in-memory music21 object the builder produced, rather than by
     re-parsing the serialized XML, so it's unaffected by any music21
-    round-trip quirks.
+    round-trip quirks. Shared by `fixture_xml_cache` (the small synthetic
+    fixture matrix) and `real_fixture_xml_cache` (real corpus scores) so
+    both are built the same way and both feed `make_score`.
     """
     FIXTURES_DIR.mkdir(parents=True, exist_ok=True)
     cache: dict[str, FixtureInfo] = {}
-    for name, builder in FIXTURE_BUILDERS.items():
+    for name, builder in builders.items():
         score = builder()
         part = score.parts[0] if list(score.parts) else score
         measure_numbers = [m.number for m in part.getElementsByClass(m21.stream.Measure)]
@@ -70,6 +72,25 @@ def fixture_xml_cache() -> dict[str, FixtureInfo]:
             has_pickup=has_pickup,
         )
     return cache
+
+
+@pytest.fixture(scope="session")
+def fixture_xml_cache() -> dict[str, FixtureInfo]:
+    """Build every small synthetic fixture score once per test session."""
+    return _build_fixture_cache(FIXTURE_BUILDERS)
+
+
+@pytest.fixture(scope="session")
+def real_fixture_xml_cache() -> dict[str, FixtureInfo]:
+    """Build every real (music21 corpus-derived) fixture score once per
+    test session. Kept separate from `fixture_xml_cache` because these
+    don't satisfy the synthetic fixtures' "measure 1 has notes on beats 1
+    and 2" contract that some generic tests rely on (see
+    `real_score_builders.py`); `make_score` accepts names from either
+    cache, but code that wants to iterate "every fixture" generically
+    should keep doing so over `fixture_xml_cache` only.
+    """
+    return _build_fixture_cache(REAL_SCORE_BUILDERS)
 
 
 @pytest.fixture
@@ -88,16 +109,20 @@ def storage_env(tmp_path):
 
 
 @pytest.fixture
-def make_score(storage_env, fixture_xml_cache):
+def make_score(storage_env, fixture_xml_cache, real_fixture_xml_cache):
     """Factory fixture: make_score("simple_4_4") -> score_id.
 
     Inserts a User + Score row backed by a fresh copy of the named
     fixture's MusicXML content, written into the test's isolated storage
-    directory, and returns the new score's id.
+    directory, and returns the new score's id. Accepts names from either
+    the synthetic fixture matrix or the real-corpus fixtures.
     """
 
     def _make(fixture_name: str) -> str:
-        info = fixture_xml_cache[fixture_name]
+        if fixture_name in fixture_xml_cache:
+            info = fixture_xml_cache[fixture_name]
+        else:
+            info = real_fixture_xml_cache[fixture_name]
 
         user_id = uuid.uuid4().hex
         score_id = uuid.uuid4().hex

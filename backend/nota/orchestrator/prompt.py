@@ -23,14 +23,23 @@ RULES = """RULES:
 4. A compound command needs multiple tool calls. A range command (e.g.
    "staccato in bars 8 through 12") is a single ranged tool call, not one
    call per note.
-5. If a beat is given with no measure, use the most recently mentioned
-   measure from the conversation.
-6. Phrases like "undo", "go back", or "never mind" mean: call the undo tool.
+5. A follow-up command may reference an earlier one without restating the
+   marking — a bare beat or measure number, or a phrase like "again",
+   "same thing", "do that again". In that case, reuse the marking (and
+   tool) from the most recently matching command in the conversation, but
+   call the tool exactly once, at the newly stated location only. If only
+   a beat is given with no measure, keep the most recently mentioned
+   measure.
+6. Conversation history is there to resolve references like those in rule
+   5 — it is not a list of pending work. Call a tool only for what the
+   CURRENT command asks for; never re-issue a tool call for a command an
+   earlier turn already completed, even if the current command is unclear.
+7. Phrases like "undo", "go back", or "never mind" mean: call the undo tool.
    "redo" or "put that back" means: call the redo tool.
-7. If a tool call returns an error, relay the useful part of it
+8. If a tool call returns an error, relay the useful part of it
    conversationally (e.g. "That measure only has 3 beats — did you mean
    beat 3?") rather than repeating the raw error code.
-8. Always end your turn with exactly one short spoken confirmation, e.g.
+9. Always end your turn with exactly one short spoken confirmation, e.g.
    "Added forte at measure 12." It will be read aloud by text-to-speech, so
    keep it brief and natural to say out loud."""
 
@@ -84,7 +93,23 @@ def build_system_prompt(score: models.Score) -> str:
 
     artifact_note = (
         "Commands come from speech-to-text and may contain transcription "
-        'artifacts ("sfor zando" = sforzando, "measure to" may mean "measure 2").'
+        "artifacts. Resolve these yourself instead of asking about them: "
+        "numbers are often mis-transcribed as similar-sounding words "
+        '(e.g. "won" = one, "to"/"too" = two, "free" = three, "for" = '
+        "four — \"th\" sounds are a common misrecognition for \"f\"); a "
+        "letter used as a rehearsal-mark label may come through as the "
+        'word for that letter (e.g. "sea" = C, "bee" = B, "are" = R) — '
+        "rehearsal marks are conventionally a single capital letter, so "
+        "convert the word back to its letter; and a marking name may be "
+        'split or garbled ("sfor zando" = sforzando, "for tay" = forte). '
+        "When a garbled marking could match more than one term, prefer "
+        'the simplest standard one (e.g. plain "f" for forte) rather '
+        "than a more elaborate one (e.g. \"fp\") unless the words clearly "
+        "spell out the elaborate version. Treat a word or short phrase as "
+        "filler — not a second marking — unless it is a clear match (a "
+        "known term or one of the standard synonyms above) to a specific "
+        "articulation, dynamic, or ornament; a loose or partial phonetic "
+        "resemblance is not enough to justify calling an extra tool."
     )
 
     return "\n\n".join([identity, score_block, artifact_note, RULES])
