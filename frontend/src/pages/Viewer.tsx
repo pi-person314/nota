@@ -56,7 +56,7 @@ function ViewerInner({ scoreId }: { scoreId: string }) {
   const theme = useThemeStore((s) => s.theme)
   const toggleTheme = useThemeStore((s) => s.toggleTheme)
   const { toolkit, isLoading, error } = useVerovio()
-  const { speak, cancel: cancelSpeech } = useSpeechReadback()
+  const { speak, cancel: cancelSpeech, speaking: ttsSpeaking } = useSpeechReadback()
 
   const [currentPage, setCurrentPage] = useState(() =>
     Math.max(1, Math.min(score.lastPage, score.totalPages ?? score.lastPage)),
@@ -510,6 +510,7 @@ function ViewerInner({ scoreId }: { scoreId: string }) {
         voiceRearmToken={voiceRearmToken}
         voiceStandDownToken={voiceStandDownToken}
         onManualRecordStart={cancelSpeech}
+        ttsSpeaking={ttsSpeaking}
       />
     </div>
   )

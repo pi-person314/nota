@@ -92,6 +92,27 @@ export function SpeakerMuteIcon({ size = 16, className, strokeWidth = 2 }: IconP
   )
 }
 
+export function WakeWordIcon({ size = 16, className, strokeWidth = 2 }: IconProps) {
+  return (
+    <svg {...base(size, strokeWidth, className)}>
+      <circle cx="12" cy="12" r="2" />
+      <path d="M12 6a6 6 0 0 1 6 6" />
+      <path d="M12 2a10 10 0 0 1 10 10" />
+    </svg>
+  )
+}
+
+export function WakeWordOffIcon({ size = 16, className, strokeWidth = 2 }: IconProps) {
+  return (
+    <svg {...base(size, strokeWidth, className)}>
+      <circle cx="12" cy="12" r="2" />
+      <path d="M12 6a6 6 0 0 1 6 6" />
+      <path d="M12 2a10 10 0 0 1 10 10" />
+      <line x1="3" y1="3" x2="21" y2="21" />
+    </svg>
+  )
+}
+
 export function GoogleIcon({ size = 16 }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden>

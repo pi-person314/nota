@@ -183,6 +183,31 @@ def build_grace_notes() -> m21.stream.Score:
     return _score(part)
 
 
+def build_duplicate_violin_names() -> m21.stream.Score:
+    """4 parts, 2 measures of 4/4, where the first two parts are both
+    named/id'd "Violin" (mirroring what a real upload of a score like
+    Beethoven's op. 18 no. 1 produces after music21's writer collapses
+    each duplicate-named part's id to match its name). Used to test
+    ordinal-alias part resolution against a small, fully-known score
+    rather than only against real corpus data.
+    """
+    pitches = ["C4", "D4", "E4", "F4", "G4", "A4", "B4", "C5"]
+
+    def _fresh_measures():
+        measures = []
+        for m_num in range(1, 3):
+            four = pitches[(m_num - 1) * 4 : m_num * 4]
+            notes = [m21.note.Note(p, quarterLength=1) for p in four]
+            measures.append(_measure(m_num, notes, "4/4" if m_num == 1 else None))
+        return measures
+
+    violin1 = _part("Violin", "Violin", _fresh_measures())
+    violin2 = _part("Violin", "Violin", _fresh_measures())
+    viola = _part("Viola", "Viola", _fresh_measures())
+    cello = _part("Violoncello", "Violoncello", _fresh_measures())
+    return _score(violin1, violin2, viola, cello)
+
+
 FIXTURE_BUILDERS = {
     "simple_4_4": build_simple_4_4,
     "compound_6_8": build_compound_6_8,

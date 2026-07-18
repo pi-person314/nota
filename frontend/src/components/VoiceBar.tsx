@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { MicIcon, SpeakerIcon, SpeakerMuteIcon } from './icons'
+import { MicIcon, SpeakerIcon, SpeakerMuteIcon, WakeWordIcon, WakeWordOffIcon } from './icons'
 import { api, ApiRequestError } from '../lib/api'
 import { useVoiceRecorder } from '../hooks/useVoiceRecorder'
+import { useWakeWord } from '../hooks/useWakeWord'
 import { useReadbackStore } from '../store/readbackStore'
+import { useWakeWordStore } from '../store/wakeWordStore'
 
 export interface CommandToast {
   kind: 'confirmation' | 'notice' | 'error'
@@ -29,6 +31,9 @@ interface VoiceBarProps {
   // readback still playing gets cut off before it can bleed into the
   // recording.
   onManualRecordStart: () => void
+  // Whether Nota is currently speaking a reply aloud — the wake word
+  // listener is suspended for the duration so it can't hear itself.
+  ttsSpeaking: boolean
 }
 
 // Shortest transcript worth sending to the command endpoint. Anything
@@ -48,12 +53,15 @@ export function VoiceBar({
   voiceRearmToken,
   voiceStandDownToken,
   onManualRecordStart,
+  ttsSpeaking,
 }: VoiceBarProps) {
   const [draft, setDraft] = useState('')
   const [retryable, setRetryable] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const readbackMuted = useReadbackStore((s) => s.muted)
   const toggleReadbackMuted = useReadbackStore((s) => s.toggleMuted)
+  const wakeWordArmed = useWakeWordStore((s) => s.armed)
+  const toggleWakeWordArmed = useWakeWordStore((s) => s.toggleArmed)
 
   const handleRecordingReady = useCallback(
     async (blob: Blob) => {
@@ -161,6 +169,26 @@ export function VoiceBar({
     void recorder.start()
   }
 
+  // Detection fires the exact same start path as tapping the mic button
+  // does — cutting off any readback in flight, then recording. Guarded
+  // against races where a stale detection lands after the mic already
+  // stopped being idle (e.g. it fires just as a command finishes coming in).
+  const handleWakeWord = useCallback(() => {
+    if (recorderRef.current.status !== 'idle') return
+    onManualRecordStart()
+    setRetryable(false)
+    void recorderRef.current.start()
+  }, [onManualRecordStart])
+
+  // Suspended (not torn down) whenever Nota is talking or already listening
+  // for a command, so it can't trigger on its own voice or double-start a
+  // recording.
+  const wakeWordEnabled = wakeWordArmed && !ttsSpeaking && !busy && recorder.status === 'idle'
+  const { available: wakeWordAvailable, listening: wakeWordListening } = useWakeWord({
+    enabled: wakeWordEnabled,
+    onWake: handleWakeWord,
+  })
+
   const micLabel =
     recorder.status === 'recording'
       ? 'Stop listening'
@@ -264,6 +292,24 @@ export function VoiceBar({
             className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-pill border border-line bg-transparent text-muted hover:border-pine hover:text-pine"
           >
             {readbackMuted ? <SpeakerMuteIcon /> : <SpeakerIcon />}
+          </button>
+          <button
+            aria-label={wakeWordArmed ? 'Disarm "Hey Nota" wake word' : 'Arm "Hey Nota" wake word'}
+            aria-pressed={wakeWordArmed}
+            title={
+              !wakeWordAvailable
+                ? 'Wake word needs setup: a Picovoice access key and trained keyword file'
+                : wakeWordArmed
+                  ? wakeWordListening
+                    ? 'Listening for "Hey Nota" — click to disarm'
+                    : 'Armed for "Hey Nota" — click to disarm'
+                  : 'Click to arm hands-free "Hey Nota" listening'
+            }
+            disabled={!wakeWordAvailable}
+            onClick={toggleWakeWordArmed}
+            className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-pill border border-line bg-transparent text-muted hover:border-pine hover:text-pine disabled:cursor-default disabled:opacity-40 disabled:hover:border-line disabled:hover:text-muted"
+          >
+            {wakeWordArmed && wakeWordAvailable ? <WakeWordIcon /> : <WakeWordOffIcon />}
           </button>
         </div>
         {history.length > 0 && (

@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { api, type ScoreDetail, type ScoreSummary } from '../lib/api'
+import { api, ApiRequestError, type ScoreDetail, type ScoreSummary } from '../lib/api'
 import { renderThumbnail } from '../hooks/useVerovio'
 
 export type ScoreFormat = 'xml' | 'mxl'
@@ -28,6 +28,9 @@ export type SortMode = (typeof SORT_MODES)[number]
 export type ShelfTab = 'library' | 'recent' | 'starred'
 
 type ActionResult = { ok: true } | { ok: false; message: string }
+type UploadResult =
+  | { ok: true; id: string }
+  | { ok: false; message: string; code?: string }
 
 function errorMessage(err: unknown, fallback: string): string {
   return err instanceof Error ? err.message : fallback
@@ -84,7 +87,7 @@ interface ScoreState {
   loadError: string | null
 
   fetchScores: () => Promise<void>
-  uploadScore: (file: File) => Promise<{ ok: true; id: string } | { ok: false; message: string }>
+  uploadScore: (file: File) => Promise<UploadResult>
   loadScoreDetail: (id: string) => Promise<ActionResult>
   updateScore: (id: string, patch: Partial<Score>) => void
   renameScore: (id: string, title: string) => Promise<void>
@@ -156,7 +159,8 @@ export const useScoreStore = create<ScoreState>((set, get) => ({
 
       return { ok: true, id: summary.id }
     } catch (err) {
-      return { ok: false, message: errorMessage(err, 'Upload failed.') }
+      const code = err instanceof ApiRequestError ? err.code : undefined
+      return { ok: false, message: errorMessage(err, 'Upload failed.'), code }
     }
   },
 

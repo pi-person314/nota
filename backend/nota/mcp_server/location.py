@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import music21 as m21
 
+from ..services.part_names import assign_ordinal_aliases, normalize_part_name
 from .errors import ErrorCode, ToolError
 
 _EPSILON = 1e-6
@@ -21,6 +22,16 @@ def resolve_part(score, part_name: str | None):
     """Return the part matching `part_name`, or the first part if
     `part_name` is None/blank. Raises PART_NOT_FOUND (listing valid part
     names) if a name is given and nothing matches.
+
+    When two or more parts share the same (case-insensitive) name -- a
+    real shape, not just a hypothetical one: a quartet's two violin parts
+    are sometimes both just named "Violin" in the source MusicXML, and
+    music21's writer even collapses their `id`s to match on export -- each
+    such part also gets an ordinal alias ("Violin 1", "Violin 2", ...) in
+    score order, and `part_name` is matched against those too. A bare,
+    still-ambiguous name (e.g. plain "Violin") deliberately keeps resolving
+    to the first matching part rather than erroring: that is pinned,
+    documented behavior other callers rely on, not an oversight.
     """
     parts = list(score.parts)
     if not parts:
@@ -30,17 +41,29 @@ def resolve_part(score, part_name: str | None):
     if part_name is None or not str(part_name).strip():
         return parts[0]
 
-    target = str(part_name).strip().lower()
-    for part in parts:
-        candidates = {c for c in (part.partName, part.id) if c}
-        if any(str(c).strip().lower() == target for c in candidates):
+    target = normalize_part_name(part_name)
+    aliases = assign_ordinal_aliases([part.partName for part in parts])
+    for part, alias in zip(parts, aliases):
+        candidates = {c for c in (part.partName, part.id, alias) if c}
+        if any(normalize_part_name(c) == target for c in candidates):
             return part
 
-    valid = sorted({str(part.partName or part.id) for part in parts})
+    valid = display_part_names(parts)
     raise ToolError(
         ErrorCode.PART_NOT_FOUND,
         f"No part named '{part_name}'. Valid parts: {', '.join(valid)}.",
     )
+
+
+def display_part_names(parts) -> list[str]:
+    """Return the name each part should be shown as to a model or user, in
+    score order: an ordinal alias ("Violin 1", "Violin 2") for parts that
+    share a name with another part, their own name/id otherwise. Used both
+    for `resolve_part`'s error hint and anywhere else a score's parts are
+    listed, so duplicate names never silently collapse into one entry.
+    """
+    aliases = assign_ordinal_aliases([part.partName for part in parts])
+    return [alias or str(part.partName or part.id) for part, alias in zip(parts, aliases)]
 
 
 def _measure_map(part) -> dict[int, m21.stream.Measure]:

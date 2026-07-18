@@ -69,7 +69,10 @@ def test_upload_persists_canonical_musicxml_file(auth_client, app):
 
 
 def test_upload_rejects_unsupported_extension(auth_client):
-    resp = _upload(auth_client, "not_a_score.pdf", b"%PDF-1.4 fake pdf bytes")
+    # .pdf is handled separately (routed through OMR conversion, see
+    # tests/routes/test_upload_pdf.py) so this uses an extension that is
+    # unsupported outright.
+    resp = _upload(auth_client, "not_a_score.docx", b"not a score")
     assert resp.status_code == 422
     assert resp.get_json()["error"] == "UNSUPPORTED_FILE_TYPE"
 

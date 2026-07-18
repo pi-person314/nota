@@ -309,20 +309,18 @@ def test_beethoven_full_measure_rest_has_no_note_position(make_score):
     assert "no notes" in err["message"]
 
 
-def test_beethoven_duplicate_violin_parts_are_indistinguishable_after_upload(make_score):
+def test_beethoven_duplicate_violin_parts_addressable_by_ordinal_alias(make_score):
     """Real finding: this score's two violin parts are both named plain
     "Violin" (no "I"/"II" suffix) in the source MusicXML. music21's
     round-trip through our storage layer (parse -> write, exactly what
     every upload does) also collapses each part's *id* to match its
     display name, so after upload both parts are `id="Violin"`,
     `partName="Violin"` — not just same-named but fully identical on
-    every field `resolve_part` can match against. There is currently no
-    way to address the second violin at all: `part="Violin"` always
-    resolves to the first, and the part-not-found hint for an unknown
-    name also only ever lists one "Violin" (deduplicated). This test pins
-    that current, real limitation rather than assuming id-based
-    addressing works around it — disambiguating same-named parts (e.g. by
-    position) would be a product-level change, not a bug fix.
+    every field `resolve_part` matches against by default. Ordinal aliases
+    ("Violin 1", "Violin 2", assigned in score order) make the second
+    violin addressable: this drives a distinct dynamic into each one and
+    confirms, by reparsing, that "Violin 1" really lands on part index 0
+    and "Violin 2" on part index 1 — not just that both calls succeeded.
     """
     sid = make_score("beethoven_op18no1_mvt1")
 
@@ -331,13 +329,42 @@ def test_beethoven_duplicate_violin_parts_are_indistinguishable_after_upload(mak
     assert len(violin_parts) == 2
     assert violin_parts[0].id == violin_parts[1].id == "Violin"
 
-    first_call = assert_success(tools.add_dynamic(sid, measure=1, beat=1, dynamic="f", part="Violin"))
-    second_call = assert_success(tools.add_dynamic(sid, measure=2, beat=1, dynamic="p", part="Violin"))
+    # measure 2 (not measure 1, which already carries a pre-existing "p"
+    # on both violins in the real score) beat 1 is otherwise untouched, so
+    # a fresh, distinctive marking on each violin there can only have come
+    # from the call that targeted it.
+    first_call = assert_success(
+        tools.add_dynamic(sid, measure=2, beat=1, dynamic="ff", part="Violin 1")
+    )
+    second_call = assert_success(
+        tools.add_dynamic(sid, measure=2, beat=1, dynamic="ppp", part="Violin 2")
+    )
     assert first_call["changed_element_ids"] and second_call["changed_element_ids"]
+
+    reparsed_after = m21.converter.parse(storage.read_xml(sid).encode("utf-8"), format="musicxml")
+    all_parts = list(reparsed_after.parts)
+
+    def _measure_2_dynamics(part_obj) -> set[str]:
+        measure = [m for m in part_obj.getElementsByClass(m21.stream.Measure) if m.number == 2][0]
+        return {d.value for d in measure.recurse().getElementsByClass(m21.dynamics.Dynamic)}
+
+    violin_1_dynamics = _measure_2_dynamics(all_parts[0])
+    violin_2_dynamics = _measure_2_dynamics(all_parts[1])
+    assert "ff" in violin_1_dynamics
+    assert "ppp" not in violin_1_dynamics
+    assert "ppp" in violin_2_dynamics
+    assert "ff" not in violin_2_dynamics
+
+    # A bare, still-ambiguous "Violin" keeps resolving to the first part --
+    # pinned behavior other tests rely on (see
+    # test_mozart_duplicate_part_names_resolve_to_first_match).
+    bare = assert_success(tools.add_dynamic(sid, measure=3, beat=1, dynamic="mf", part="Violin"))
+    assert bare["changed_element_ids"]
 
     unknown = tools.add_dynamic(sid, measure=1, beat=1, dynamic="f", part="Cello")
     err = assert_error(unknown, ErrorCode.PART_NOT_FOUND)
-    assert err["message"].count("Violin") == 1  # deduplicated, not listed twice
+    assert "Violin 1" in err["message"]
+    assert "Violin 2" in err["message"]
 
 
 def test_beethoven_undo_redo_cycle_on_large_score(make_score):
@@ -382,27 +409,26 @@ def test_haydn_hairpin_add_and_remove_amid_real_hairpins(make_score):
     assert_round_trips(sid)
 
 
-def test_haydn_pre_existing_hairpins_a_known_music21_roundtrip_limitation(
+def test_haydn_pre_existing_hairpins_all_survive_repaired_roundtrip(
     real_fixture_xml_cache, make_score
 ):
-    """Documents a real, music21-level round-trip limitation surfaced by
-    stress-testing against this score, rather than something introduced
-    by nota's own tools: writing a score with several overlapping
-    crescendo/decrescendo hairpins back out to MusicXML and re-parsing it
-    can lose a few of them (music21 emits `<wedge number="N">` pairs, and
-    its own writer doesn't always keep each concurrently-open hairpin's
-    number distinct — the `number` attribute is meant to disambiguate
-    concurrently open wedges within a part). This is bounded (a small
-    fraction of the original hairpins, never every one, no exception) and
-    happens purely inside music21's own writer/reader — nota's own tools
-    never invented, targeted, or corrupted the specific hairpin that's
-    lost. Root-causing/patching music21's own spanner-numbering logic is
-    out of scope here; this test exists so any change in music21's
-    behavior (regression or fix) is noticed.
+    """This score has 11 real crescendo/decrescendo hairpins, 2 of which
+    used to be silently dropped on round-trip by a music21 writer defect
+    (see `nota.services.musicxml_repair`'s module docstring): music21's
+    MusicXML writer doesn't always keep each concurrently-open hairpin's
+    `number` attribute distinct, so a `<wedge number="N" type="stop">`
+    would sometimes be written *before* its own `<wedge number="N"
+    type="...">` opener elsewhere in the same part -- music21's reader
+    processes directions strictly in document order, so it hit the stop
+    with nothing open for that number and dropped the pair, logging
+    "Could not import wedge: ...".
 
-    Also confirms the failure mode is silent data loss, not a raised
-    exception or a dangling id: the score keeps round-tripping, and an
-    unrelated tool call on top of it still produces valid, present ids.
+    `repair_spanner_order` reorders exactly that shape wherever this app
+    writes score MusicXML (upload ingestion and every tool call's
+    rewrite), so all 11 must now survive every round trip: the initial
+    corpus.parse -> write that seeds this fixture, and a second full
+    parse+write cycle triggered by an ordinary, unrelated tool call (the
+    harness always rewrites the whole score on every accepted mutation).
     """
     from music21 import corpus
 
@@ -413,8 +439,8 @@ def test_haydn_pre_existing_hairpins_a_known_music21_roundtrip_limitation(
     assert original_wedges == 11
 
     # The fixture cache already round-tripped the score once (corpus.parse
-    # -> score.write, exactly as `_build_fixture_cache` and every upload
-    # does); some hairpins may already be gone by this point.
+    # -> score.write -> repair_spanner_order, exactly what a real upload
+    # does) -- all 11 must still be there.
     once_roundtripped = m21.converter.parse(
         real_fixture_xml_cache["haydn_op74no1_mvt3"].xml.encode("utf-8"), format="musicxml"
     )
@@ -425,13 +451,24 @@ def test_haydn_pre_existing_hairpins_a_known_music21_roundtrip_limitation(
             )
         )
     )
-    assert 0 < once_count <= original_wedges
+    assert once_count == 11
 
     # A normal, unrelated tool call triggers a second full parse+write
-    # cycle (the harness always rewrites the whole score). This must not
-    # raise, and the tool's own reported id must still be present and
-    # correct, regardless of what happens to the pre-existing hairpins.
+    # cycle. The tool's own reported id must be present and correct, and
+    # all 11 pre-existing hairpins must still be there afterward too.
     sid = make_score("haydn_op74no1_mvt3")
     result = assert_success(tools.add_dynamic(sid, measure=50, beat=1, dynamic="mf"))
     assert_round_trips(sid)
     assert_ids_present(sid, result["changed_element_ids"])
+
+    twice_roundtripped = m21.converter.parse(
+        storage.read_xml(sid).encode("utf-8"), format="musicxml"
+    )
+    twice_count = len(
+        list(
+            twice_roundtripped.recurse().getElementsByClass(
+                (m21.dynamics.Crescendo, m21.dynamics.Diminuendo)
+            )
+        )
+    )
+    assert twice_count == 11

@@ -12,6 +12,21 @@ and `--category NAME` run a cheaper subset. `run_case`/`run_suite` are also
 the entry points `tests/evals/` uses to exercise the full runner machinery
 against a scripted fake Anthropic client, with no API key and no
 subprocess -- see that package for how the seam is patched.
+
+A case can fail to be scored at all: if the orchestrator/LLM layer itself
+errors out (a timeout or API failure -- `result["error"]`, e.g.
+`LLM_TIMEOUT`/`LLM_ERROR`), the case never meaningfully exercised the
+model. That is tracked as a third outcome, "errored", distinct from
+passed/failed, both in `CaseResult`/`SuiteReport` and in the exit code:
+
+    0 - every scored case passed, no orchestrator/LLM errors
+    1 - at least one case failed (the model produced the wrong tool
+        calls/response) and no case errored
+    2 - ANTHROPIC_API_KEY missing; the run never started
+    3 - at least one case errored (orchestrator/LLM failure); the pass/
+        fail counts for this run are not a trustworthy signal -- see the
+        error breakdown printed to the console and `error_counts` in the
+        JSON report
 """
 
 from __future__ import annotations
@@ -48,6 +63,7 @@ class CaseResult:
     actual_calls: list
     confirmation: str
     needs_clarification: bool
+    error: str | None = None
 
 
 @dataclass
@@ -55,8 +71,25 @@ class SuiteReport:
     generated_at: str
     total: int
     passed: int
+    failed: int
+    errored: int
+    error_counts: dict
     by_category: dict
     results: list = field(default_factory=list)
+
+
+def case_outcome(result: CaseResult) -> str:
+    """Classify a scored case into exactly one of three buckets.
+
+    A case whose orchestrator/LLM call itself errored out (a timeout or
+    API failure, surfaced via `CaseResult.error`) never meaningfully
+    exercised the model -- it is neither a pass nor a model failure, so it
+    is bucketed separately from both and must not be counted toward
+    either.
+    """
+    if result.error:
+        return "errored"
+    return "passed" if result.passed else "failed"
 
 
 def run_case(case: dict, dispatcher: RecordingDispatcher, cfg) -> CaseResult:
@@ -67,6 +100,12 @@ def run_case(case: dict, dispatcher: RecordingDispatcher, cfg) -> CaseResult:
     history for context-carryover cases), then runs the scored transcript.
     Only tool calls made while handling the scored transcript -- not the
     setup transcripts -- count toward the result.
+
+    If the orchestrator reports an `error` (an LLM timeout or API
+    failure), the case is never scored against its expectation -- it is
+    marked failed with a detail describing the error rather than being
+    graded on whatever partial tool calls happened before the failure, so
+    an outage can never be mistaken for the model getting the case wrong.
     """
     score_id = register_fresh_score(cfg, name=f"Eval: {case['id']}")
 
@@ -77,7 +116,11 @@ def run_case(case: dict, dispatcher: RecordingDispatcher, cfg) -> CaseResult:
     result = loop.run_command(score_id, case["transcript"])
     actual_calls = dispatcher.calls[start:]
 
-    passed, detail = score_expectation(case["expectation"], actual_calls, result)
+    error = result.get("error")
+    if error:
+        passed, detail = False, f"orchestrator/LLM error before scoring: {error}"
+    else:
+        passed, detail = score_expectation(case["expectation"], actual_calls, result)
 
     return CaseResult(
         id=case["id"],
@@ -89,6 +132,7 @@ def run_case(case: dict, dispatcher: RecordingDispatcher, cfg) -> CaseResult:
         actual_calls=[{"tool": name, "args": args} for name, args in actual_calls],
         confirmation=result.get("confirmation", ""),
         needs_clarification=result.get("needs_clarification", False),
+        error=error,
     )
 
 
@@ -96,15 +140,29 @@ def run_suite(cases: list[dict], dispatcher: RecordingDispatcher, cfg) -> SuiteR
     results = [run_case(one_case, dispatcher, cfg) for one_case in cases]
 
     by_category: dict[str, dict] = {}
+    error_counts: dict[str, int] = {}
+    passed = failed = errored = 0
+
     for r in results:
-        bucket = by_category.setdefault(r.category, {"total": 0, "passed": 0})
+        bucket = by_category.setdefault(r.category, {"total": 0, "passed": 0, "failed": 0, "errored": 0})
         bucket["total"] += 1
-        bucket["passed"] += int(r.passed)
+        outcome = case_outcome(r)
+        bucket[outcome] += 1
+        if outcome == "passed":
+            passed += 1
+        elif outcome == "failed":
+            failed += 1
+        else:
+            errored += 1
+            error_counts[r.error] = error_counts.get(r.error, 0) + 1
 
     return SuiteReport(
         generated_at=datetime.now(timezone.utc).isoformat(),
         total=len(results),
-        passed=sum(r.passed for r in results),
+        passed=passed,
+        failed=failed,
+        errored=errored,
+        error_counts=error_counts,
         by_category=by_category,
         results=[asdict(r) for r in results],
     )
@@ -123,24 +181,61 @@ def _select_cases(limit: int | None, category: str | None) -> list[dict]:
     return cases
 
 
+def exit_code_for(report: SuiteReport) -> int:
+    """Map a completed suite run to a process exit code (see the module
+    docstring for the full convention). Errored cases always take priority
+    over failed ones -- once any case erred out, this run's pass/fail
+    counts are not a trustworthy signal, regardless of how the rest of the
+    suite scored.
+    """
+    if report.errored:
+        return 3
+    return 0 if report.failed == 0 else 1
+
+
+def _format_error_breakdown(error_counts: dict) -> str:
+    return ", ".join(f"{code} x{count}" for code, count in sorted(error_counts.items()))
+
+
 def _print_table(report: SuiteReport) -> None:
     print()
-    print(f"{'category':<24} {'passed':>8} {'total':>8} {'rate':>8}")
-    print("-" * 52)
+    print(f"{'category':<24} {'passed':>8} {'failed':>8} {'errored':>8} {'total':>8} {'rate':>8}")
+    print("-" * 68)
     for cat in sorted(report.by_category):
         bucket = report.by_category[cat]
-        rate = bucket["passed"] / bucket["total"] * 100 if bucket["total"] else 0.0
-        print(f"{cat:<24} {bucket['passed']:>8} {bucket['total']:>8} {rate:>7.1f}%")
-    print("-" * 52)
-    overall_rate = report.passed / report.total * 100 if report.total else 0.0
-    print(f"{'OVERALL':<24} {report.passed:>8} {report.total:>8} {overall_rate:>7.1f}%")
+        scored = bucket["passed"] + bucket["failed"]
+        rate = bucket["passed"] / scored * 100 if scored else 0.0
+        print(
+            f"{cat:<24} {bucket['passed']:>8} {bucket['failed']:>8} {bucket['errored']:>8} "
+            f"{bucket['total']:>8} {rate:>7.1f}%"
+        )
+    print("-" * 68)
+    scored_total = report.passed + report.failed
+    overall_rate = report.passed / scored_total * 100 if scored_total else 0.0
+    print(
+        f"{'OVERALL':<24} {report.passed:>8} {report.failed:>8} {report.errored:>8} "
+        f"{report.total:>8} {overall_rate:>7.1f}%"
+    )
     print()
 
-    failures = [r for r in report.results if not r["passed"]]
+    summary = f"{report.passed} passed, {report.failed} failed"
+    if report.errored:
+        summary += f", {report.errored} errored ({_format_error_breakdown(report.error_counts)})"
+    print(summary)
+    print()
+
+    errors = [r for r in report.results if r.get("error")]
+    if errors:
+        print(f"{len(errors)} errored case(s) -- orchestrator/LLM failure, not scored against expectation:\n")
+        for r in errors:
+            print(f"ERROR [{r['category']}] {r['id']}: \"{r['transcript']}\" -- {r['error']}")
+        print()
+
+    failures = [r for r in report.results if not r["passed"] and not r.get("error")]
     if failures:
         print(f"{len(failures)} failing case(s):\n")
         for r in failures:
-            print(f"[{r['category']}] {r['id']}: \"{r['transcript']}\"")
+            print(f"FAIL [{r['category']}] {r['id']}: \"{r['transcript']}\"")
             print(f"    expected: {r['expected']}")
             print(f"    actual tool calls: {r['actual_calls']}")
             print(f"    confirmation: {r['confirmation']!r}")
@@ -149,7 +244,17 @@ def _print_table(report: SuiteReport) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Run the Nota LLM command eval suite.")
+    parser = argparse.ArgumentParser(
+        description="Run the Nota LLM command eval suite.",
+        epilog=(
+            "Exit codes: 0 = every scored case passed, no orchestrator/LLM errors; "
+            "1 = at least one case failed and none errored; "
+            "2 = ANTHROPIC_API_KEY missing, run never started; "
+            "3 = at least one case errored (orchestrator/LLM failure) -- pass/fail "
+            "counts for this run are not a trustworthy signal, see the error "
+            "breakdown in the console output and error_counts in the JSON report."
+        ),
+    )
     parser.add_argument("--limit", type=int, default=None, help="Only run the first N selected cases.")
     parser.add_argument(
         "--category", type=str, default=None, choices=CATEGORIES, help="Only run cases in this category."
@@ -206,7 +311,15 @@ def main(argv: list[str] | None = None) -> int:
     _print_table(report)
     print(f"Full report written to {out_path}")
 
-    return 0 if report.passed == report.total else 1
+    if report.errored:
+        print(
+            f"WARNING: {report.errored} case(s) errored due to an orchestrator/LLM failure "
+            f"({_format_error_breakdown(report.error_counts)}). This run's pass/fail counts do "
+            "not reflect model quality for those cases -- rerun before trusting the result.",
+            file=sys.stderr,
+        )
+
+    return exit_code_for(report)
 
 
 if __name__ == "__main__":

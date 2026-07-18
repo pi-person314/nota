@@ -11,17 +11,22 @@ from __future__ import annotations
 import json
 import os
 import re
+import tempfile
 import uuid
+from pathlib import Path
 
 from flask import Blueprint, current_app, jsonify, request
 
 from .. import db as db_module
 from .. import models
 from .. import storage
+from ..services import omr
 from . import musicxml_ingest as ingest
 from ._helpers import current_user_id, error_response, iso_utc, login_required
 
 bp = Blueprint("scores", __name__, url_prefix="/api/scores")
+
+PDF_EXTENSION = ".pdf"
 
 SORT_FIELDS = {
     "last_opened": (models.Score.last_opened_at, True),
@@ -70,6 +75,28 @@ def _safe_export_filename(name: str) -> str:
     return f"{stem}.musicxml"
 
 
+def _run_omr(filename: str, raw_bytes: bytes) -> tuple[str, bytes]:
+    """Convert an uploaded PDF's bytes to MusicXML via Audiveris.
+
+    Writes the PDF to a temporary directory (Audiveris is a CLI tool that
+    reads/writes files, not bytes), runs the conversion, and reads the
+    result back into memory before the temporary directory is cleaned up.
+    Returns `(filename, xml_bytes)` with a filename derived from the
+    original upload's name and the exported file's extension, so the
+    normal ingest pipeline's extension check and display-name fallback
+    both behave the same as for a native MusicXML upload.
+    """
+    stem = Path(filename).stem or "score"
+    with tempfile.TemporaryDirectory(prefix="nota-omr-") as tmp_dir:
+        tmp_dir_path = Path(tmp_dir)
+        pdf_path = tmp_dir_path / f"{stem}.pdf"
+        pdf_path.write_bytes(raw_bytes)
+
+        output_dir = tmp_dir_path / "out"
+        produced = omr.convert_pdf_to_musicxml(pdf_path, output_dir)
+        return f"{stem}{produced.suffix}", produced.read_bytes()
+
+
 @bp.post("/upload")
 @login_required
 def upload():
@@ -87,8 +114,22 @@ def upload():
             f"File exceeds the {cfg.max_upload_mb} MB upload limit.",
         )
 
+    filename = upload_file.filename
+
+    if ingest.extension_of(filename) == PDF_EXTENSION:
+        try:
+            filename, raw_bytes = _run_omr(filename, raw_bytes)
+        except omr.OMRNotConfigured:
+            return error_response(
+                422,
+                "OMR_NOT_CONFIGURED",
+                "PDF import is not configured on this server.",
+            )
+        except omr.OMRConversionFailed as exc:
+            return error_response(422, "OMR_FAILED", str(exc))
+
     try:
-        metadata = ingest.ingest_upload(upload_file.filename, raw_bytes)
+        metadata = ingest.ingest_upload(filename, raw_bytes)
     except ingest.UploadRejected as exc:
         return error_response(exc.status, exc.code, exc.message)
 

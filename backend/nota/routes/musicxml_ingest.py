@@ -19,6 +19,9 @@ import defusedxml.ElementTree as defused_ET
 import music21 as m21
 from music21.musicxml.m21ToXml import GeneralObjectExporter
 
+from ..services.musicxml_repair import repair_spanner_order
+from ..services.part_names import assign_ordinal_aliases
+
 ALLOWED_EXTENSIONS = {".musicxml", ".xml", ".mxl"}
 
 # Cap on the *uncompressed* size of a .mxl archive's contents, independent
@@ -194,6 +197,18 @@ def parse_score_metadata(text: str, filename: str) -> ScoreMetadata:
         part_display_name = instrument.partName or part.partName or part_id
         parts.append({"id": part_id, "name": part_display_name})
 
+    # Two or more parts sharing a display name (a real shape: string
+    # quartets sometimes name both violin parts plain "Violin" in the
+    # source file) are otherwise indistinguishable everywhere this
+    # metadata is shown -- give each an ordinal alias ("Violin 1",
+    # "Violin 2", ...) in score order so the stored name list, and
+    # anything built from it (the assistant's system prompt, the score
+    # detail API response), never silently collapses them into one entry.
+    aliases = assign_ordinal_aliases([p["name"] for p in parts])
+    for part_entry, alias in zip(parts, aliases):
+        if alias is not None:
+            part_entry["name"] = alias
+
     first_part = parts_stream[0]
     measures = list(first_part.getElementsByClass(m21.stream.Measure))
     measure_count = len(measures)
@@ -247,7 +262,12 @@ def parse_score_metadata(text: str, filename: str) -> ScoreMetadata:
         raise UploadRejected(
             "INVALID_MUSICXML", f"music21 could not re-export this file: {exc}"
         ) from exc
-    canonical_xml = canonical_bytes.decode("utf-8")
+    # The MusicXML this score will live as on disk from now on -- repair
+    # any music21 writer defect (see musicxml_repair's module docstring)
+    # before it's ever stored, so a score with the affected shape doesn't
+    # silently lose spanners the very first time a tool call re-serializes
+    # it.
+    canonical_xml = repair_spanner_order(canonical_bytes.decode("utf-8"))
 
     return ScoreMetadata(
         canonical_xml=canonical_xml,

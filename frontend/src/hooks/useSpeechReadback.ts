@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useReadbackStore } from '../store/readbackStore'
 
 // Some browsers occasionally fail to fire the `end` event for an utterance
@@ -12,6 +12,11 @@ interface UseSpeechReadbackResult {
   // (older Safari, some embedded webviews, etc). Callers don't need to
   // branch on this themselves — speak() just becomes a no-op.
   supported: boolean
+  // True for the duration of an utterance actually being spoken — false the
+  // rest of the time, including while muted or unsupported. Useful for
+  // callers that need to suspend something (like wake word detection) for
+  // as long as Nota is talking.
+  speaking: boolean
   // Speaks `text` aloud unless readback is muted or unsupported. `onEnd`
   // fires once, either when the utterance actually finishes (or errors) or
   // immediately if nothing was spoken — so callers can treat it as "safe to
@@ -33,6 +38,7 @@ export function useSpeechReadback(): UseSpeechReadbackResult {
   // it entirely, which `in` would still count as "available".
   const supported = typeof window !== 'undefined' && Boolean(window.speechSynthesis) && typeof SpeechSynthesisUtterance !== 'undefined'
   const timeoutRef = useRef<number | null>(null)
+  const [speaking, setSpeaking] = useState(false)
 
   const clearFallbackTimer = useCallback(() => {
     if (timeoutRef.current !== null) {
@@ -44,6 +50,7 @@ export function useSpeechReadback(): UseSpeechReadbackResult {
   const cancel = useCallback(() => {
     clearFallbackTimer()
     if (supported) window.speechSynthesis.cancel()
+    setSpeaking(false)
   }, [supported, clearFallbackTimer])
 
   const speak = useCallback(
@@ -65,12 +72,14 @@ export function useSpeechReadback(): UseSpeechReadbackResult {
         if (settled) return
         settled = true
         clearFallbackTimer()
+        setSpeaking(false)
         onEnd?.()
       }
       utterance.onend = finish
       utterance.onerror = finish
       timeoutRef.current = window.setTimeout(finish, MAX_UTTERANCE_MS)
 
+      setSpeaking(true)
       window.speechSynthesis.speak(utterance)
     },
     [supported, muted, clearFallbackTimer],
@@ -80,5 +89,5 @@ export function useSpeechReadback(): UseSpeechReadbackResult {
   // e.g. the viewer unmounts mid-utterance when the musician navigates off.
   useEffect(() => cancel, [cancel])
 
-  return { supported, speak, cancel }
+  return { supported, speaking, speak, cancel }
 }

@@ -1,20 +1,33 @@
 """The stateless per-call harness every notation tool runs through.
 
-The MCP server never holds a parsed document across calls. Each call:
+No two calls ever share the same in-memory document. Each call:
 
 1. resolves the score's file path via `storage.path_for` (SCORE_NOT_FOUND
    if there is no such score),
-2. parses the file fresh with music21,
+2. obtains a parsed score -- checked out of `score_cache` if an entry
+   matches the file's current mtime/size, otherwise parsed fresh with
+   music21. Either way, this call is the object's exclusive owner: nothing
+   else can be holding a reference to it at the same time (see
+   `nota.services.score_cache` for how that invariant holds up under
+   concurrent calls),
 3. asks the tool-supplied `planner` to validate the request against the
    parsed score and describe what it would do — validation failures raise
    `ToolError` here, before anything is written to the undo stack,
 4. if the planner reports a no-op (e.g. add_dynamic's de-duplication),
    returns success with no snapshot and no write,
 5. otherwise snapshots the score's current on-disk XML (so undo restores
-   the pre-mutation state), applies the mutation, and writes the result
-   back to the same path,
+   the pre-mutation state), applies the mutation, writes the result back to
+   the same path, and repairs it in place against a known music21 writer
+   defect (see `nota.services.musicxml_repair`),
 6. verifies every id the mutation reports actually survived serialization,
 7. touches the score's last-modified timestamp and returns the result.
+
+Steps 3 and 4 return the checked-out score to the cache before returning,
+since neither validation nor no-op detection ever mutates it -- it is
+still exactly what a fresh parse would produce. A score that reaches step
+5 is never returned to the cache: it is about to be mutated and rewritten,
+and the cache only ever holds objects it can guarantee are faithful to
+what is currently on disk.
 """
 
 from __future__ import annotations
@@ -25,6 +38,7 @@ from typing import Callable
 import music21 as m21
 
 from .. import storage
+from ..services import musicxml_repair, score_cache
 from .errors import ErrorCode, ToolError
 
 
@@ -70,17 +84,33 @@ def run_tool(score_id: str, label: str, planner: Planner) -> dict:
     if path is None:
         return _error(ErrorCode.SCORE_NOT_FOUND, f"No score with id {score_id}.")
 
-    score = m21.converter.parse(path)
+    cache = score_cache.get_cache()
+    score = cache.checkout(path) if cache is not None else None
+    if score is None:
+        score = m21.converter.parse(path)
 
     try:
         plan = planner(score)
     except ToolError as exc:
+        # Validation never mutates (see location.py's module docstring and
+        # every planner's own docstring), so this object is still exactly
+        # what a fresh parse would produce -- safe to make available to
+        # whatever the next call against this score turns out to be.
+        if cache is not None:
+            cache.release(path, score)
         return _error(exc.code, exc.message)
 
     if plan.no_op_summary is not None:
+        if cache is not None:
+            cache.release(path, score)
         return _ok([], plan.no_op_summary)
 
     # Snapshot the pre-mutation on-disk state before touching anything.
+    # `score` is intentionally not released back into the cache anywhere
+    # past this point: it is about to be mutated and rewritten, and
+    # re-inserting a post-mutation object would risk diverging from what a
+    # fresh parse of the file it's about to become would yield (see
+    # score_cache.py's module docstring).
     storage.save_snapshot(score_id, label)
 
     changed_element_ids, summary = plan.apply()
@@ -107,6 +137,18 @@ def run_tool(score_id: str, label: str, planner: Planner) -> dict:
 
     with open(path, "r", encoding="utf-8") as f:
         written_xml = f.read()
+
+    # Repair a music21 writer defect (see musicxml_repair's module
+    # docstring) in what was just written, before anything downstream
+    # reads it back: a score that already had the affected shape would
+    # otherwise start silently losing spanners the moment this call's
+    # rewrite touches it, even though the mutation itself has nothing to
+    # do with them.
+    repaired_xml = musicxml_repair.repair_spanner_order(written_xml)
+    if repaired_xml != written_xml:
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(repaired_xml)
+        written_xml = repaired_xml
 
     missing = [i for i in changed_element_ids if f'id="{i}"' not in written_xml]
     if missing:

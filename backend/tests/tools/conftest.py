@@ -20,6 +20,7 @@ import pytest
 
 from nota import db as db_module
 from nota import models, storage
+from nota.services.musicxml_repair import repair_spanner_order
 
 from .musicxml_builders import FIXTURE_BUILDERS
 from .real_score_builders import REAL_SCORE_BUILDERS
@@ -53,6 +54,12 @@ def _build_fixture_cache(builders: dict) -> dict[str, "FixtureInfo"]:
     round-trip quirks. Shared by `fixture_xml_cache` (the small synthetic
     fixture matrix) and `real_fixture_xml_cache` (real corpus scores) so
     both are built the same way and both feed `make_score`.
+
+    The XML text itself is repaired the same way a real upload's would be
+    (see `nota.services.musicxml_repair`) before being cached: `make_score`
+    seeds a score's on-disk file directly from this cache to skip the
+    HTTP upload round trip, and a score that reached storage via a real
+    upload would never carry the unrepaired shape in the first place.
     """
     FIXTURES_DIR.mkdir(parents=True, exist_ok=True)
     cache: dict[str, FixtureInfo] = {}
@@ -66,8 +73,10 @@ def _build_fixture_cache(builders: dict) -> dict[str, "FixtureInfo"]:
 
         path = FIXTURES_DIR / f"{name}.musicxml"
         score.write("musicxml", fp=str(path))
+        repaired_xml = repair_spanner_order(path.read_text(encoding="utf-8"))
+        path.write_text(repaired_xml, encoding="utf-8")
         cache[name] = FixtureInfo(
-            xml=path.read_text(encoding="utf-8"),
+            xml=repaired_xml,
             measure_count=measure_count,
             has_pickup=has_pickup,
         )
