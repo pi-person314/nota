@@ -7,3 +7,4 @@ __pycache__/
 backend/venv/
 backend/data/
 backend/*.db
+backend/evals/results/*.json
