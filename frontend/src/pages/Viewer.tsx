@@ -413,7 +413,7 @@ function ViewerInner({ scoreId }: { scoreId: string }) {
             Export MusicXML
           </button>
           <button
-            aria-label={theme === 'light' ? 'Switch to night mode' : 'Switch to light mode'}
+            aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
             onClick={toggleTheme}
             className={`cursor-pointer border-none bg-transparent p-1 ${
               theme === 'light' ? 'text-muted hover:text-ink' : 'text-brass'

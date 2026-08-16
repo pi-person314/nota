@@ -21,6 +21,7 @@ from music21.musicxml.m21ToXml import GeneralObjectExporter
 
 from ..services.musicxml_repair import repair_spanner_order
 from ..services.part_names import assign_ordinal_aliases
+from ..services.spanner_index import accelerated_spanner_lookup
 
 ALLOWED_EXTENSIONS = {".musicxml", ".xml", ".mxl"}
 
@@ -257,7 +258,8 @@ def parse_score_metadata(text: str, filename: str) -> ScoreMetadata:
     # of a normal rejected-upload response — so this must be treated the
     # same way an outright parse failure is.
     try:
-        canonical_bytes = GeneralObjectExporter(parsed).parse()
+        with accelerated_spanner_lookup():
+            canonical_bytes = GeneralObjectExporter(parsed).parse()
     except Exception as exc:
         raise UploadRejected(
             "INVALID_MUSICXML", f"music21 could not re-export this file: {exc}"

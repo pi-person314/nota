@@ -267,7 +267,9 @@ export function VoiceBar({
           ) : (
             <>
               <div className="text-[13.5px] font-semibold text-muted">Voice off</div>
-              <div className="mt-0.75 font-mono text-[12.5px] text-ghost">tap the mic to speak a command</div>
+              <div className="mt-0.75 font-mono text-[12.5px] text-ghost">
+                tap the mic to speak a command — or say “Hey Nota” ({wakeWordAvailable && wakeWordArmed ? 'on' : 'off'})
+              </div>
             </>
           )}
         </div>
@@ -298,7 +300,7 @@ export function VoiceBar({
             aria-pressed={wakeWordArmed}
             title={
               !wakeWordAvailable
-                ? 'Wake word needs setup: a Picovoice access key and trained keyword file'
+                ? 'Wake word needs setup: openWakeWord model files in the public directory'
                 : wakeWordArmed
                   ? wakeWordListening
                     ? 'Listening for "Hey Nota" — click to disarm'
@@ -307,9 +309,14 @@ export function VoiceBar({
             }
             disabled={!wakeWordAvailable}
             onClick={toggleWakeWordArmed}
-            className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-pill border border-line bg-transparent text-muted hover:border-pine hover:text-pine disabled:cursor-default disabled:opacity-40 disabled:hover:border-line disabled:hover:text-muted"
+            className={`flex min-h-9 shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-pill px-3.5 py-1.5 font-sans text-[12.5px] disabled:cursor-default disabled:opacity-40 disabled:hover:border-line disabled:hover:text-muted ${
+              wakeWordArmed && wakeWordAvailable
+                ? 'border border-transparent bg-pine text-on-pine hover:bg-pine-deep'
+                : 'border border-line bg-transparent text-muted hover:border-pine hover:text-pine'
+            }`}
           >
             {wakeWordArmed && wakeWordAvailable ? <WakeWordIcon /> : <WakeWordOffIcon />}
+            <span>“Hey Nota”</span>
           </button>
         </div>
         {history.length > 0 && (

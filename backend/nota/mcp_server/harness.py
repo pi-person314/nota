@@ -38,7 +38,7 @@ from typing import Callable
 import music21 as m21
 
 from .. import storage
-from ..services import musicxml_repair, score_cache
+from ..services import musicxml_repair, score_cache, spanner_index
 from .errors import ErrorCode, ToolError
 
 
@@ -116,7 +116,8 @@ def run_tool(score_id: str, label: str, planner: Planner) -> dict:
     changed_element_ids, summary = plan.apply()
 
     try:
-        score.write("musicxml", fp=path)
+        with spanner_index.accelerated_spanner_lookup():
+            score.write("musicxml", fp=path)
     except Exception as exc:
         # Defense in depth: every score reaching this point round-tripped
         # cleanly through music21 at upload time (see musicxml_ingest.py),

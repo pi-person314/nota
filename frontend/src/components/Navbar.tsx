@@ -74,7 +74,7 @@ export function Navbar() {
             >
               <MenuItem label="Settings" onClick={() => setMenuOpen(false)} />
               <MenuItem
-                label={theme === 'light' ? 'Night mode' : 'Light mode'}
+                label={theme === 'light' ? 'Dark mode' : 'Light mode'}
                 onClick={() => {
                   toggleTheme()
                   setMenuOpen(false)

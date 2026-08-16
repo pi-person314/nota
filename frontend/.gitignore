@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# openWakeWord model files (CC BY-NC-SA / trained locally) — not checked in,
+# same treatment the old Porcupine .ppn/.pv files got.
+public/oww/
