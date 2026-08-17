@@ -64,6 +64,8 @@ export interface ScoreSummary {
   name: string
   part_name: string | null
   is_starred: boolean
+  is_archived: boolean
+  from_pdf: boolean
   measure_count: number
   has_pickup?: boolean
   created_at: string
@@ -86,6 +88,14 @@ export interface ScoreDetail extends ScoreSummary {
   parts?: ScorePart[]
   time_signatures?: TimeSignatureEntry[]
   musicxml: string
+}
+
+// Only present on the upload endpoint's response, and only for PDF
+// (OMR) imports: user-facing sentences flagging lower-confidence
+// recognition that didn't fail outright. Absent for native
+// MusicXML/.mxl uploads, and an empty array for a clean PDF import.
+export interface UploadResponse extends ScoreSummary {
+  omr_warnings?: string[]
 }
 
 export type SortKey = 'last_opened' | 'last_modified' | 'date_uploaded' | 'name_asc' | 'name_desc'
@@ -145,22 +155,23 @@ export const api = {
     return request<User>('/auth/me')
   },
 
-  listScores(params?: { sort?: SortKey; starred?: boolean }) {
+  listScores(params?: { sort?: SortKey; starred?: boolean; archived?: 'true' | 'false' | 'all' }) {
     const qs = new URLSearchParams()
     if (params?.sort) qs.set('sort', params.sort)
     if (params?.starred) qs.set('starred', 'true')
+    if (params?.archived) qs.set('archived', params.archived)
     const suffix = qs.toString() ? `?${qs.toString()}` : ''
     return request<ScoreSummary[]>(`/scores${suffix}`)
   },
   uploadScore(file: File) {
     const form = new FormData()
     form.append('file', file)
-    return request<ScoreSummary>('/scores/upload', { method: 'POST', body: form })
+    return request<UploadResponse>('/scores/upload', { method: 'POST', body: form })
   },
   getScore(id: string) {
     return request<ScoreDetail>(`/scores/${id}`)
   },
-  updateScore(id: string, patch: { name?: string; is_starred?: boolean }) {
+  updateScore(id: string, patch: { name?: string; is_starred?: boolean; is_archived?: boolean }) {
     return request<ScoreSummary>(`/scores/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(patch),

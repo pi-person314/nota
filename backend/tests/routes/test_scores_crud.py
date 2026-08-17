@@ -5,10 +5,12 @@ delete (file + rows), export headers, and cross-user ownership checks.
 from __future__ import annotations
 
 import os
+import sqlite3
 import time
 
 from conftest import upload_score
 from fixtures.musicxml_builders import simple_score_bytes
+from sqlalchemy import inspect
 
 from nota import db as db_module
 from nota import models
@@ -91,6 +93,56 @@ def test_list_scores_starred_filter(auth_client):
     assert body[0]["is_starred"] is True
 
 
+def test_list_scores_default_excludes_archived(auth_client):
+    archived = upload_score(auth_client, content=simple_score_bytes(title="Archived"))
+    upload_score(auth_client, content=simple_score_bytes(title="Not Archived"))
+    auth_client.patch(f"/api/scores/{archived['id']}", json={"is_archived": True})
+
+    resp = auth_client.get("/api/scores")
+    body = resp.get_json()
+    assert len(body) == 1
+    assert body[0]["id"] != archived["id"]
+
+
+def test_list_scores_archived_true_returns_only_archived(auth_client):
+    archived = upload_score(auth_client, content=simple_score_bytes(title="Archived"))
+    upload_score(auth_client, content=simple_score_bytes(title="Not Archived"))
+    auth_client.patch(f"/api/scores/{archived['id']}", json={"is_archived": True})
+
+    resp = auth_client.get("/api/scores?archived=true")
+    body = resp.get_json()
+    assert len(body) == 1
+    assert body[0]["id"] == archived["id"]
+    assert body[0]["is_archived"] is True
+
+
+def test_list_scores_archived_all_returns_both(auth_client):
+    archived = upload_score(auth_client, content=simple_score_bytes(title="Archived"))
+    active = upload_score(auth_client, content=simple_score_bytes(title="Not Archived"))
+    auth_client.patch(f"/api/scores/{archived['id']}", json={"is_archived": True})
+
+    resp = auth_client.get("/api/scores?archived=all")
+    ids = {s["id"] for s in resp.get_json()}
+    assert ids == {archived["id"], active["id"]}
+
+
+def test_list_scores_starred_filter_excludes_archived_by_default(auth_client):
+    starred_archived = upload_score(
+        auth_client, content=simple_score_bytes(title="Starred Archived")
+    )
+    upload_score(auth_client, content=simple_score_bytes(title="Not Starred"))
+    auth_client.patch(f"/api/scores/{starred_archived['id']}", json={"is_starred": True})
+    auth_client.patch(f"/api/scores/{starred_archived['id']}", json={"is_archived": True})
+
+    resp = auth_client.get("/api/scores?starred=true")
+    assert resp.get_json() == []
+
+    resp = auth_client.get("/api/scores?starred=true&archived=all")
+    body = resp.get_json()
+    assert len(body) == 1
+    assert body[0]["id"] == starred_archived["id"]
+
+
 def test_get_score_returns_full_musicxml_and_touches_opened(auth_client):
     created = upload_score(auth_client)
     resp = auth_client.get(f"/api/scores/{created['id']}")
@@ -121,6 +173,20 @@ def test_patch_stars_score(auth_client):
     resp = auth_client.patch(f"/api/scores/{created['id']}", json={"is_starred": True})
     assert resp.status_code == 200
     assert resp.get_json()["is_starred"] is True
+
+
+def test_patch_archives_score_roundtrip(auth_client):
+    created = upload_score(auth_client)
+    resp = auth_client.patch(f"/api/scores/{created['id']}", json={"is_archived": True})
+    assert resp.status_code == 200
+    assert resp.get_json()["is_archived"] is True
+
+    resp = auth_client.get(f"/api/scores/{created['id']}")
+    assert resp.get_json()["is_archived"] is True
+
+    resp = auth_client.patch(f"/api/scores/{created['id']}", json={"is_archived": False})
+    assert resp.status_code == 200
+    assert resp.get_json()["is_archived"] is False
 
 
 def test_patch_empty_body_is_422(auth_client):
@@ -177,6 +243,78 @@ def test_export_returns_attachment_headers(auth_client):
 def test_export_not_found_is_404(auth_client):
     resp = auth_client.get("/api/scores/does-not-exist/export")
     assert resp.status_code == 404
+
+
+# --- Schema migration -------------------------------------------------
+
+
+def test_init_db_adds_missing_is_archived_column(tmp_path):
+    """A scores table created before is_archived existed should gain the
+    column when init_db runs against it again, without losing the table.
+    """
+    db_path = tmp_path / "legacy.db"
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        """
+        CREATE TABLE scores (
+            id VARCHAR(32) PRIMARY KEY,
+            user_id VARCHAR(32) NOT NULL,
+            name VARCHAR(255) NOT NULL,
+            part_name VARCHAR(255),
+            is_starred BOOLEAN NOT NULL DEFAULT 0,
+            file_path VARCHAR(1024) NOT NULL,
+            measure_count INTEGER NOT NULL,
+            has_pickup BOOLEAN NOT NULL DEFAULT 0,
+            parts_json TEXT NOT NULL DEFAULT '[]',
+            time_signatures_json TEXT NOT NULL DEFAULT '[]',
+            created_at DATETIME,
+            last_opened_at DATETIME,
+            last_modified_at DATETIME
+        )
+        """
+    )
+    conn.commit()
+    conn.close()
+
+    db_module.init_db(f"sqlite:///{db_path}")
+
+    columns = {col["name"] for col in inspect(db_module.get_engine()).get_columns("scores")}
+    assert "is_archived" in columns
+
+
+def test_init_db_adds_missing_from_pdf_column(tmp_path):
+    """A scores table created before from_pdf existed should gain the
+    column when init_db runs against it again, without losing the table.
+    """
+    db_path = tmp_path / "legacy_from_pdf.db"
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        """
+        CREATE TABLE scores (
+            id VARCHAR(32) PRIMARY KEY,
+            user_id VARCHAR(32) NOT NULL,
+            name VARCHAR(255) NOT NULL,
+            part_name VARCHAR(255),
+            is_starred BOOLEAN NOT NULL DEFAULT 0,
+            is_archived BOOLEAN NOT NULL DEFAULT 0,
+            file_path VARCHAR(1024) NOT NULL,
+            measure_count INTEGER NOT NULL,
+            has_pickup BOOLEAN NOT NULL DEFAULT 0,
+            parts_json TEXT NOT NULL DEFAULT '[]',
+            time_signatures_json TEXT NOT NULL DEFAULT '[]',
+            created_at DATETIME,
+            last_opened_at DATETIME,
+            last_modified_at DATETIME
+        )
+        """
+    )
+    conn.commit()
+    conn.close()
+
+    db_module.init_db(f"sqlite:///{db_path}")
+
+    columns = {col["name"] for col in inspect(db_module.get_engine()).get_columns("scores")}
+    assert "from_pdf" in columns
 
 
 # --- Ownership -------------------------------------------------------

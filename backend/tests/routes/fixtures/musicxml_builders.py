@@ -110,6 +110,95 @@ def two_part_score_bytes(title: str = "Two Part Piece") -> bytes:
     return _write_musicxml_bytes(s)
 
 
+def omr_clean_score_bytes(title: str = "Scanned Piece") -> bytes:
+    """One part, four measures, two sounded half notes per measure (eight
+    sounded notes total), no empty measures. Used as mocked OMR output for
+    a scan that recognized cleanly -- the quality gate should accept it
+    with zero warnings.
+    """
+    s = stream.Score()
+    part = stream.Part()
+    part.id = "P1"
+    part.partName = "Piano"
+
+    m1 = stream.Measure(number=1)
+    m1.append(meter.TimeSignature("4/4"))
+    m1.append(note.Note("C4", type="half"))
+    m1.append(note.Note("D4", type="half"))
+    part.append(m1)
+
+    for i in range(2, 5):
+        m = stream.Measure(number=i)
+        m.append(note.Note("E4", type="half"))
+        m.append(note.Note("F4", type="half"))
+        part.append(m)
+
+    s.insert(0, part)
+    s.metadata = metadata.Metadata()
+    s.metadata.title = title
+    return _write_musicxml_bytes(s)
+
+
+def omr_mostly_empty_score_bytes(title: str = "Mostly Blank Scan") -> bytes:
+    """One part, twelve measures: only the first has a sounded note, the
+    remaining eleven are rest-only whole measures. Empty fraction is
+    11/12 (~0.92), over the quality gate's 0.9 reject threshold with
+    twelve measures to judge by, so this is used as mocked OMR output for
+    a scan the gate should reject outright.
+    """
+    s = stream.Score()
+    part = stream.Part()
+    part.id = "P1"
+    part.partName = "Piano"
+
+    m1 = stream.Measure(number=1)
+    m1.append(meter.TimeSignature("4/4"))
+    m1.append(note.Note("C4", type="whole"))
+    part.append(m1)
+
+    for i in range(2, 13):
+        m = stream.Measure(number=i)
+        m.append(note.Rest(type="whole"))
+        part.append(m)
+
+    s.insert(0, part)
+    s.metadata = metadata.Metadata()
+    s.metadata.title = title
+    return _write_musicxml_bytes(s)
+
+
+def omr_warning_level_score_bytes(title: str = "Partially Recognized Scan") -> bytes:
+    """One part, six measures alternating a sounded whole note with a
+    rest-only whole measure. Empty fraction is 0.5 (over the 0.4 warn
+    threshold but well under the 0.9 reject threshold) and only three
+    notes sound in total (under the 8-note warn threshold), so this is
+    used as mocked OMR output for a scan the gate should accept but flag
+    with warnings.
+    """
+    s = stream.Score()
+    part = stream.Part()
+    part.id = "P1"
+    part.partName = "Piano"
+
+    m1 = stream.Measure(number=1)
+    m1.append(meter.TimeSignature("4/4"))
+    m1.append(note.Note("C4", type="whole"))
+    part.append(m1)
+
+    for i in range(2, 7):
+        m = stream.Measure(number=i)
+        if i % 2 == 0:
+            m.append(note.Rest(type="whole"))
+        else:
+            m.append(note.Note("D4", type="whole"))
+        part.append(m)
+
+    s.insert(0, part)
+    s.metadata = metadata.Metadata()
+    s.metadata.title = title
+    return _write_musicxml_bytes(s)
+
+
 def _write_musicxml_bytes(score: stream.Score) -> bytes:
     from music21.musicxml.m21ToXml import GeneralObjectExporter
 

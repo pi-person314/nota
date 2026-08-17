@@ -9,8 +9,10 @@ const ACCEPT = '.musicxml,.xml,.mxl,.pdf'
 // INVALID_MUSICXML from a PDF that converted but didn't parse) falls back
 // to the server's own message, same as any other upload failure.
 const OMR_ERROR_MESSAGES: Record<string, string> = {
-  OMR_NOT_CONFIGURED: 'PDF import (experimental) is not set up on this server yet.',
+  OMR_NOT_CONFIGURED: 'PDF import (beta) is not set up on this server yet.',
   OMR_FAILED: "Couldn't read this PDF as sheet music. Try a cleaner scan, or upload MusicXML instead.",
+  OMR_LOW_QUALITY:
+    "Couldn't get usable notation from this PDF. A clean, high-resolution scan of printed sheet music works best.",
 }
 
 interface UploadDropzoneProps {
@@ -24,21 +26,26 @@ export function UploadDropzone({ large = false, headline = 'Drop a score here' }
   const [uploading, setUploading] = useState<string | null>(null)
   const [converting, setConverting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const handleFile = async (file: File) => {
     setError(null)
+    setNotice(null)
     setUploading(file.name)
     // PDF import runs OCR-based music recognition server-side, which takes
     // tens of seconds — a distinct label so this doesn't read as a stalled
     // upload of a small file.
-    setConverting(file.name.toLowerCase().endsWith('.pdf'))
+    const isPdf = file.name.toLowerCase().endsWith('.pdf')
+    setConverting(isPdf)
     const result = await uploadScore(file)
     setUploading(null)
     setConverting(false)
     if (inputRef.current) inputRef.current.value = ''
     if (!result.ok) {
       setError((result.code && OMR_ERROR_MESSAGES[result.code]) || result.message)
+    } else if (isPdf && result.warnings?.length) {
+      setNotice(`Imported with warnings: ${result.warnings.join(' ')}`)
     }
   }
 
@@ -66,15 +73,16 @@ export function UploadDropzone({ large = false, headline = 'Drop a score here' }
         <>
           <div className="text-sm font-medium">{uploading}</div>
           {converting && (
-            <div className="text-xs text-faint">Converting PDF to notation (experimental) — this can take a minute…</div>
+            <div className="text-xs text-faint">Converting PDF to notation (beta) — this can take a minute…</div>
           )}
           <div className="upload-hairline w-40" />
         </>
       ) : (
         <>
           <div className={`font-medium ${large ? 'text-[15px]' : 'text-sm'}`}>{headline}</div>
-          <div className="text-xs text-faint">MusicXML · .mxl · .xml · .pdf (experimental) — or click to browse</div>
+          <div className="text-xs text-faint">MusicXML · .mxl · .xml · .pdf (beta) — or click to browse</div>
           {error && <div className="text-xs text-error">{error}</div>}
+          {!error && notice && <div className="text-xs text-brass">{notice}</div>}
         </>
       )}
       <input

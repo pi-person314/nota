@@ -8,6 +8,7 @@ import { ConfirmDialog } from './ConfirmDialog'
 
 export function ScoreCard({ score, delay = 0 }: { score: Score; delay?: number }) {
   const toggleStar = useScoreStore((s) => s.toggleStar)
+  const toggleArchive = useScoreStore((s) => s.toggleArchive)
   const renameScore = useScoreStore((s) => s.renameScore)
   const removeScore = useScoreStore((s) => s.removeScore)
   const markOpened = useScoreStore((s) => s.markOpened)
@@ -58,7 +59,7 @@ export function ScoreCard({ score, delay = 0 }: { score: Score; delay?: number }
 
   return (
     <div
-      className="rise group cursor-pointer overflow-hidden rounded-card border border-line bg-card transition-shadow hover:shadow-bloom"
+      className="rise group cursor-pointer rounded-card border border-line bg-card transition-shadow hover:shadow-bloom"
       style={{ animationDelay: `${delay}ms` }}
       onClick={open}
       role="link"
@@ -70,7 +71,7 @@ export function ScoreCard({ score, delay = 0 }: { score: Score; delay?: number }
       <Thumbnail
         svg={score.thumbnail}
         caption="preview unavailable"
-        className="h-32 gap-3 border-b border-line-faint px-5 py-4.5"
+        className="h-32 gap-3 overflow-hidden rounded-t-card border-b border-line-faint px-5 py-4.5"
       />
       <div className="px-5 pb-4 pt-3.5">
         <div className="flex items-start justify-between gap-2.5">
@@ -128,6 +129,13 @@ export function ScoreCard({ score, delay = 0 }: { score: Score; delay?: number }
                       downloadScore(score.id, `${score.title}.musicxml`)
                     }}
                   />
+                  <CardMenuItem
+                    label={score.archived ? 'Unarchive' : 'Archive'}
+                    onClick={() => {
+                      setMenuOpen(false)
+                      void toggleArchive(score.id)
+                    }}
+                  />
                   <div className="mx-4 my-1 h-px bg-line-faint" />
                   <CardMenuItem
                     label="Delete"
@@ -158,7 +166,17 @@ export function ScoreCard({ score, delay = 0 }: { score: Score; delay?: number }
           <div className="text-[12.5px] text-faint">
             {scoreMeta(score, relativeTime(score.openedAt))}
           </div>
-          <div className="font-mono text-[11px] text-ghost">{score.marks} measures</div>
+          <div className="flex items-center gap-1.5">
+            {score.fromPdf && (
+              <span
+                title="Converted from a PDF — recognition is not 100% reliable, so check this score against the original."
+                className="rounded-pill border border-line px-1.5 font-mono text-[10px] text-brass"
+              >
+                PDF
+              </span>
+            )}
+            <div className="font-mono text-[11px] text-ghost">{score.marks} measures</div>
+          </div>
         </div>
       </div>
       {confirming && (

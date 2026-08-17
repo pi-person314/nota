@@ -32,7 +32,17 @@ export function ContinueCard({ score }: { score: Score }) {
     >
       <div className="flex-1">
         <div className="mb-2.5 text-xs tracking-[0.08em] text-faint">CONTINUE</div>
-        <div className="font-display text-2xl text-ink">{score.title}</div>
+        <div className="flex items-center gap-2">
+          <div className="font-display text-2xl text-ink">{score.title}</div>
+          {score.fromPdf && (
+            <span
+              title="Converted from a PDF — recognition is not 100% reliable, so check this score against the original."
+              className="rounded-pill border border-line px-1.5 font-mono text-[10px] text-brass"
+            >
+              PDF
+            </span>
+          )}
+        </div>
         {meta && <div className="mt-1 text-sm text-muted">{meta}</div>}
         {score.lastSaid && (
           <div className="mt-4 inline-flex items-center gap-2 rounded-input bg-tint px-3 py-2 text-[13px] text-ink-soft">

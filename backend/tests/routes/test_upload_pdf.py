@@ -13,7 +13,12 @@ import os
 from pathlib import Path
 
 import pytest
-from fixtures.musicxml_builders import simple_score_bytes
+from fixtures.musicxml_builders import (
+    omr_clean_score_bytes,
+    omr_mostly_empty_score_bytes,
+    omr_warning_level_score_bytes,
+    simple_score_bytes,
+)
 
 from nota.services import omr
 
@@ -111,6 +116,50 @@ def test_pdf_upload_result_filename_uses_original_stem(auth_client, monkeypatch,
     resp = _upload(auth_client, "my great score.pdf", b"%PDF-1.4 fake pdf bytes")
 
     assert resp.status_code == 201
+
+
+def test_pdf_upload_mostly_empty_omr_output_is_low_quality(auth_client, monkeypatch):
+    _install_fake_omr(monkeypatch, xml_bytes=omr_mostly_empty_score_bytes())
+
+    resp = _upload(auth_client, "scanned.pdf", b"%PDF-1.4 fake pdf bytes")
+
+    assert resp.status_code == 422
+    assert resp.get_json()["error"] == "OMR_LOW_QUALITY"
+
+    listing = auth_client.get("/api/scores")
+    assert listing.get_json() == []
+
+
+def test_pdf_upload_warning_level_omr_output_is_201_with_warnings(auth_client, monkeypatch):
+    _install_fake_omr(monkeypatch, xml_bytes=omr_warning_level_score_bytes())
+
+    resp = _upload(auth_client, "scanned.pdf", b"%PDF-1.4 fake pdf bytes")
+
+    assert resp.status_code == 201
+    body = resp.get_json()
+    assert body["omr_warnings"] != []
+
+
+def test_pdf_upload_clean_omr_output_is_201_with_no_warnings(auth_client, monkeypatch):
+    _install_fake_omr(monkeypatch, xml_bytes=omr_clean_score_bytes())
+
+    resp = _upload(auth_client, "scanned.pdf", b"%PDF-1.4 fake pdf bytes")
+
+    assert resp.status_code == 201
+    body = resp.get_json()
+    assert body["omr_warnings"] == []
+    assert body["from_pdf"] is True
+
+
+def test_native_musicxml_upload_has_no_omr_warnings_key(auth_client):
+    resp = auth_client.post(
+        "/api/scores/upload",
+        data={"file": (io.BytesIO(simple_score_bytes()), "score.musicxml")},
+        content_type="multipart/form-data",
+    )
+
+    assert resp.status_code == 201
+    assert "omr_warnings" not in resp.get_json()
 
 
 @pytest.mark.skipif(

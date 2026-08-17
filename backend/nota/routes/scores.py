@@ -21,6 +21,7 @@ from .. import db as db_module
 from .. import models
 from .. import storage
 from ..services import omr
+from ..services.omr_quality import assess_omr_output
 from . import musicxml_ingest as ingest
 from ._helpers import current_user_id, error_response, iso_utc, login_required
 
@@ -46,6 +47,8 @@ def _score_summary(score: models.Score) -> dict:
         "name": score.name,
         "part_name": score.part_name,
         "is_starred": score.is_starred,
+        "is_archived": score.is_archived,
+        "from_pdf": score.from_pdf,
         "measure_count": score.measure_count,
         "has_pickup": score.has_pickup,
         "created_at": iso_utc(score.created_at),
@@ -118,8 +121,9 @@ def upload():
         )
 
     filename = upload_file.filename
+    from_pdf = ingest.extension_of(filename) == PDF_EXTENSION
 
-    if ingest.extension_of(filename) == PDF_EXTENSION:
+    if from_pdf:
         try:
             filename, raw_bytes = _run_omr(filename, raw_bytes)
         except omr.OMRNotConfigured:
@@ -136,6 +140,18 @@ def upload():
     except ingest.UploadRejected as exc:
         return error_response(exc.status, exc.code, exc.message)
 
+    omr_warnings: list[str] | None = None
+    if from_pdf:
+        quality = assess_omr_output(metadata.canonical_xml)
+        if not quality.acceptable:
+            return error_response(
+                422,
+                "OMR_LOW_QUALITY",
+                "Audiveris couldn't extract usable notation from this PDF. "
+                "A cleaner, higher-resolution scan of printed sheet music works best.",
+            )
+        omr_warnings = quality.warnings
+
     score_id = uuid.uuid4().hex
     file_path = os.path.join(cfg.score_storage_dir, f"{score_id}.musicxml")
 
@@ -150,12 +166,16 @@ def upload():
             has_pickup=metadata.has_pickup,
             parts_json=json.dumps(metadata.parts),
             time_signatures_json=json.dumps(metadata.time_signatures),
+            from_pdf=from_pdf,
         )
         db_session.add(score)
         db_session.flush()
         summary = _score_summary(score)
 
     storage.write_xml(score_id, metadata.canonical_xml)
+
+    if omr_warnings is not None:
+        summary["omr_warnings"] = omr_warnings
 
     return jsonify(summary), 201
 
@@ -171,6 +191,7 @@ def list_scores():
             f"Unknown sort '{sort}'. Valid values: {', '.join(SORT_FIELDS)}.",
         )
     starred_only = request.args.get("starred", "").strip().lower() == "true"
+    archived_filter = request.args.get("archived", "").strip().lower()
 
     column, descending = SORT_FIELDS[sort]
     order = column.desc() if descending else column.asc()
@@ -179,6 +200,10 @@ def list_scores():
         query = db_session.query(models.Score).filter_by(user_id=current_user_id())
         if starred_only:
             query = query.filter_by(is_starred=True)
+        if archived_filter == "true":
+            query = query.filter_by(is_archived=True)
+        elif archived_filter != "all":
+            query = query.filter_by(is_archived=False)
         scores = query.order_by(order).all()
         summaries = [_score_summary(s) for s in scores]
 
@@ -215,9 +240,9 @@ def get_score(score_id):
 @login_required
 def update_score(score_id):
     data = request.get_json(silent=True) or {}
-    if "name" not in data and "is_starred" not in data:
+    if "name" not in data and "is_starred" not in data and "is_archived" not in data:
         return error_response(
-            422, "INVALID_INPUT", "Provide name and/or is_starred to update."
+            422, "INVALID_INPUT", "Provide name, is_starred, and/or is_archived to update."
         )
 
     with db_module.session_scope() as db_session:
@@ -233,6 +258,9 @@ def update_score(score_id):
 
         if "is_starred" in data:
             score.is_starred = bool(data.get("is_starred"))
+
+        if "is_archived" in data:
+            score.is_archived = bool(data.get("is_archived"))
 
         db_session.flush()
         summary = _score_summary(score)

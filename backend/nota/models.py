@@ -48,6 +48,8 @@ class Score(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     part_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_starred: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_archived: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    from_pdf: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     # Path (relative or absolute) to the canonical MusicXML file on disk.
     file_path: Mapped[str] = mapped_column(String(1024), nullable=False)

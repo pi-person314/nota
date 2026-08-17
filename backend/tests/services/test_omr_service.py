@@ -133,3 +133,71 @@ def test_launcher_not_found_oserror_raises_conversion_failed(monkeypatch, config
 
     with pytest.raises(omr.OMRConversionFailed, match="Could not run Audiveris"):
         omr.convert_pdf_to_musicxml(pdf_path, tmp_path / "out")
+
+
+def _recording_run(output_dir, calls):
+    """A fake `subprocess.run` that records the `timeout` it was called
+    with and leaves a real exported file behind, so callers can complete
+    successfully and inspect what timeout ended up being used.
+    """
+
+    def fake_run(cmd, capture_output, text, timeout):
+        calls.append(timeout)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "score.mxl").write_bytes(b"fake musicxml archive bytes")
+        return _FakeCompletedProcess(returncode=0)
+
+    return fake_run
+
+
+def test_env_var_timeout_is_used_when_no_explicit_timeout(
+    monkeypatch, configured, tmp_path
+):
+    monkeypatch.setenv("OMR_TIMEOUT_S", "45")
+    pdf_path = _pdf(tmp_path)
+    output_dir = tmp_path / "out"
+    calls: list[float] = []
+    monkeypatch.setattr(omr.subprocess, "run", _recording_run(output_dir, calls))
+
+    omr.convert_pdf_to_musicxml(pdf_path, output_dir)
+
+    assert calls == [45.0]
+
+
+def test_invalid_env_var_timeout_falls_back_to_default(monkeypatch, configured, tmp_path):
+    pdf_path = _pdf(tmp_path)
+    output_dir = tmp_path / "out"
+    calls: list[float] = []
+    monkeypatch.setattr(omr.subprocess, "run", _recording_run(output_dir, calls))
+
+    for bad_value in ("abc", "-5"):
+        monkeypatch.setenv("OMR_TIMEOUT_S", bad_value)
+        calls.clear()
+
+        omr.convert_pdf_to_musicxml(pdf_path, output_dir)
+
+        assert calls == [omr.DEFAULT_TIMEOUT_S]
+
+
+def test_unset_env_var_timeout_falls_back_to_default(monkeypatch, configured, tmp_path):
+    monkeypatch.delenv("OMR_TIMEOUT_S", raising=False)
+    pdf_path = _pdf(tmp_path)
+    output_dir = tmp_path / "out"
+    calls: list[float] = []
+    monkeypatch.setattr(omr.subprocess, "run", _recording_run(output_dir, calls))
+
+    omr.convert_pdf_to_musicxml(pdf_path, output_dir)
+
+    assert calls == [omr.DEFAULT_TIMEOUT_S]
+
+
+def test_explicit_timeout_overrides_env_var(monkeypatch, configured, tmp_path):
+    monkeypatch.setenv("OMR_TIMEOUT_S", "45")
+    pdf_path = _pdf(tmp_path)
+    output_dir = tmp_path / "out"
+    calls: list[float] = []
+    monkeypatch.setattr(omr.subprocess, "run", _recording_run(output_dir, calls))
+
+    omr.convert_pdf_to_musicxml(pdf_path, output_dir, timeout_s=12.0)
+
+    assert calls == [12.0]

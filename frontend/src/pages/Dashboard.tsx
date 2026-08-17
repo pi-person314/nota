@@ -18,6 +18,7 @@ function sortScores(scores: Score[], mode: SortMode): Score[] {
 function emptyLine(tab: ShelfTab, search: string): string {
   if (search) return `Nothing matches “${search}”.`
   if (tab === 'starred') return 'Nothing starred yet — tap a star on any score.'
+  if (tab === 'archived') return 'Nothing archived — use a score’s ⋯ menu to tuck it away.'
   return 'Nothing here yet.'
 }
 
@@ -37,13 +38,18 @@ export function Dashboard() {
     void fetchScores()
   }, [fetchScores])
 
+  const activeScores = useMemo(() => scores.filter((s) => !s.archived), [scores])
+
   const lastOpened = useMemo(
-    () => (scores.length ? [...scores].sort((a, b) => b.openedAt - a.openedAt)[0] : undefined),
-    [scores],
+    () =>
+      activeScores.length
+        ? [...activeScores].sort((a, b) => b.openedAt - a.openedAt)[0]
+        : undefined,
+    [activeScores],
   )
 
   const shelf = useMemo(() => {
-    let list = scores
+    let list = tab === 'archived' ? scores.filter((s) => s.archived) : activeScores
     if (tab === 'starred') list = list.filter((s) => s.starred)
     const q = search.trim().toLowerCase()
     if (q) {
@@ -53,8 +59,11 @@ export function Dashboard() {
       )
     }
     return sortScores(list, tab === 'recent' ? 'Last opened' : sortMode)
-  }, [scores, tab, search, sortMode])
+  }, [scores, activeScores, tab, search, sortMode])
 
+  // Any score at all — archived included — keeps the tabbed shelf visible,
+  // so a fully-archived library is still reachable via the Archived tab
+  // instead of collapsing into the first-run empty state.
   const hasScores = scores.length > 0
   const lastIn = lastOpened ? (lastOpened.composer ?? lastOpened.title) : ''
 
@@ -65,9 +74,9 @@ export function Dashboard() {
         <h1 className="m-0 font-display text-[40px] font-normal leading-tight text-ink">
           {timeOfDayGreeting()}, {userName}.
         </h1>
-        {hasScores && (
+        {activeScores.length > 0 && (
           <p className="mt-2 text-[15px] text-muted">
-            {countWord(scores.length)} {scores.length === 1 ? 'score' : 'scores'} on your stand.
+            {countWord(activeScores.length)} {activeScores.length === 1 ? 'score' : 'scores'} on your stand.
             {lastIn && ` You were last in the ${lastIn}.`}
           </p>
         )}

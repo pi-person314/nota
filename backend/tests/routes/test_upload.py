@@ -40,6 +40,7 @@ def test_upload_musicxml_happy_path(auth_client):
     assert body["part_name"] == "Violin"
     assert body["measure_count"] == 1
     assert body["is_starred"] is False
+    assert body["from_pdf"] is False
     assert "id" in body
     assert "created_at" in body and "last_opened_at" in body and "last_modified_at" in body
 

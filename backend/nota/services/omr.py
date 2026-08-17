@@ -88,11 +88,30 @@ def _cleanup_scratch(output_dir: Path, stem: str, keep: Path) -> None:
             pass
 
 
+def _default_timeout_s() -> float:
+    """Resolve the default OMR timeout, checked at call time (not import
+    time) so `OMR_TIMEOUT_S` can be set or changed after this module has
+    already been imported -- tests monkeypatch the environment this way,
+    and it lets an operator adjust the timeout without a process restart
+    tied to import order. Falls back to `DEFAULT_TIMEOUT_S` when the
+    variable is unset or isn't a valid positive float.
+    """
+    raw = os.environ.get("OMR_TIMEOUT_S")
+    if raw:
+        try:
+            value = float(raw)
+        except ValueError:
+            value = 0.0
+        if value > 0:
+            return value
+    return DEFAULT_TIMEOUT_S
+
+
 def convert_pdf_to_musicxml(
     pdf_path: str | Path,
     output_dir: str | Path,
     *,
-    timeout_s: float = DEFAULT_TIMEOUT_S,
+    timeout_s: float | None = None,
 ) -> Path:
     """Run Audiveris in batch mode on `pdf_path`, exporting into
     `output_dir`, and return the path to the resulting MusicXML file.
@@ -103,9 +122,16 @@ def convert_pdf_to_musicxml(
     `output_dir`'s lifecycle beyond that (e.g. a temporary directory the
     caller cleans up once it has read the returned file).
 
+    `timeout_s`, if omitted, comes from the `OMR_TIMEOUT_S` environment
+    variable when it's set to a valid positive float, else
+    `DEFAULT_TIMEOUT_S`. Passing `timeout_s` explicitly overrides both.
+
     Raises `OMRNotConfigured` if Audiveris isn't set up, `OMRConversionFailed`
     if the process fails, times out, or produces no output.
     """
+    if timeout_s is None:
+        timeout_s = _default_timeout_s()
+
     launcher = _audiveris_launcher()
 
     pdf_path = Path(pdf_path)

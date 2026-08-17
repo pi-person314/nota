@@ -9,6 +9,7 @@ const TABS: { id: ShelfTab; label: string }[] = [
   { id: 'library', label: 'Library' },
   { id: 'recent', label: 'Recent' },
   { id: 'starred', label: 'Starred' },
+  { id: 'archived', label: 'Archived' },
 ]
 
 export function Navbar() {

@@ -10,6 +10,8 @@ export interface Score {
   composer?: string
   part?: string
   starred: boolean
+  archived: boolean
+  fromPdf: boolean
   marks: number
   data?: string | ArrayBuffer
   format?: ScoreFormat
@@ -25,11 +27,11 @@ export interface Score {
 
 export const SORT_MODES = ['Last opened', 'Last modified', 'Name A–Z'] as const
 export type SortMode = (typeof SORT_MODES)[number]
-export type ShelfTab = 'library' | 'recent' | 'starred'
+export type ShelfTab = 'library' | 'recent' | 'starred' | 'archived'
 
 type ActionResult = { ok: true } | { ok: false; message: string }
 type UploadResult =
-  | { ok: true; id: string }
+  | { ok: true; id: string; warnings?: string[] }
   | { ok: false; message: string; code?: string }
 
 function errorMessage(err: unknown, fallback: string): string {
@@ -55,6 +57,8 @@ function mapSummary(summary: ScoreSummary, existing?: Score): Score {
     title: summary.name,
     part: summary.part_name ?? undefined,
     starred: summary.is_starred,
+    archived: summary.is_archived ?? false,
+    fromPdf: summary.from_pdf ?? false,
     marks: summary.measure_count,
     openedAt: parseServerDate(summary.last_opened_at),
     modifiedAt: parseServerDate(summary.last_modified_at),
@@ -93,6 +97,7 @@ interface ScoreState {
   refreshThumbnail: (id: string, xml: string) => void
   renameScore: (id: string, title: string) => Promise<void>
   toggleStar: (id: string) => Promise<void>
+  toggleArchive: (id: string) => Promise<void>
   removeScore: (id: string) => Promise<void>
   markOpened: (id: string) => void
   setSearch: (q: string) => void
@@ -114,7 +119,7 @@ export const useScoreStore = create<ScoreState>((set, get) => ({
   fetchScores: async () => {
     set({ loading: true, loadError: null })
     try {
-      const summaries = await api.listScores()
+      const summaries = await api.listScores({ archived: 'all' })
       set((s) => {
         const byId = new Map(s.scores.map((sc) => [sc.id, sc]))
         return {
@@ -185,7 +190,9 @@ export const useScoreStore = create<ScoreState>((set, get) => ({
         }))
       }
 
-      return { ok: true, id: summary.id }
+      return summary.omr_warnings?.length
+        ? { ok: true, id: summary.id, warnings: summary.omr_warnings }
+        : { ok: true, id: summary.id }
     } catch (err) {
       const code = err instanceof ApiRequestError ? err.code : undefined
       return { ok: false, message: errorMessage(err, 'Upload failed.'), code }
@@ -259,6 +266,22 @@ export const useScoreStore = create<ScoreState>((set, get) => ({
     } catch {
       set((s) => ({
         scores: s.scores.map((sc) => (sc.id === id ? { ...sc, starred: prev.starred } : sc)),
+      }))
+    }
+  },
+
+  toggleArchive: async (id) => {
+    const prev = get().scores.find((sc) => sc.id === id)
+    if (!prev) return
+    const nextArchived = !prev.archived
+    set((s) => ({
+      scores: s.scores.map((sc) => (sc.id === id ? { ...sc, archived: nextArchived } : sc)),
+    }))
+    try {
+      await api.updateScore(id, { is_archived: nextArchived })
+    } catch {
+      set((s) => ({
+        scores: s.scores.map((sc) => (sc.id === id ? { ...sc, archived: prev.archived } : sc)),
       }))
     }
   },
