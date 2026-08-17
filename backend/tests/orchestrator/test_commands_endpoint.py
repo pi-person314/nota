@@ -139,6 +139,32 @@ def test_history_endpoint_empty_for_fresh_score(scored_client):
     assert resp.get_json() == {"items": []}
 
 
+def test_history_endpoint_returns_commands_oldest_first(
+    scored_client, install_fake_client, install_direct_dispatcher
+):
+    client, score_id = scored_client
+    install_direct_dispatcher()
+    install_fake_client(
+        [
+            fake_response(tool_use_block("toolu_1", "add_dynamic", {"measure": 1, "beat": 1, "dynamic": "f"})),
+            fake_response(text_block("Added forte at measure 1.")),
+            fake_response(tool_use_block("toolu_2", "add_dynamic", {"measure": 2, "beat": 1, "dynamic": "p"})),
+            fake_response(text_block("Added piano at measure 2.")),
+        ]
+    )
+
+    client.post(f"/api/scores/{score_id}/command", json={"text": "add forte at measure one"})
+    client.post(f"/api/scores/{score_id}/command", json={"text": "add piano at measure two"})
+
+    items = client.get(f"/api/scores/{score_id}/history").get_json()["items"]
+
+    assert [item["transcript"] for item in items] == [
+        "add forte at measure one",
+        "add piano at measure two",
+    ]
+    assert [item["id"] for item in items] == sorted(item["id"] for item in items)
+
+
 def test_history_endpoint_requires_ownership(scored_client, second_auth_client):
     _owner_client, score_id = scored_client
     resp = second_auth_client.get(f"/api/scores/{score_id}/history")

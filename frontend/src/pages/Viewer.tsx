@@ -144,6 +144,12 @@ function ViewerInner({ scoreId }: { scoreId: string }) {
         if (cancelled) return
         setHistory(
           res.items
+            // A logged command that called no tools was Nota asking a
+            // clarifying question rather than making an edit. Those are
+            // shown as the "Nota asks" line while they're live, so
+            // restoring them here as completed-command chips would both
+            // duplicate that and misrepresent them as changes made.
+            .filter((it) => it.tools_called.length > 0)
             .map((it) => it.confirmation || it.transcript)
             .filter(Boolean)
             .slice(-HISTORY_LIMIT),

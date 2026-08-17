@@ -232,6 +232,33 @@ export function useSpeechReadback(): UseSpeechReadbackResult {
     [supported, muted, clearFallbackTimer, settle],
   )
 
+  // Muting mid-reply stops the current one immediately rather than letting
+  // it play out — muting is a "stop talking" gesture, not just a preference
+  // for next time. Unlike cancel(), the sequence's onEnd still fires: a
+  // caller waiting on speech to finish before acting (the mic re-arming
+  // itself after a clarifying question) should proceed as if the reply had
+  // ended normally, not wait forever on speech that will never come.
+  // Driven by a store subscription rather than the rendered `muted` value so
+  // this reacts to the moment muting happens, and only then.
+  useEffect(
+    () =>
+      useReadbackStore.subscribe((state, prevState) => {
+        if (!state.muted || prevState.muted || settledRef.current) return
+        const onEnd = onEndRef.current
+        // Bumped before cancelling so the `end`/`error` events that
+        // speechSynthesis.cancel() fires on the interrupted utterance are
+        // seen as stale and can't advance the sequence to its next chunk.
+        generationRef.current += 1
+        settledRef.current = true
+        onEndRef.current = undefined
+        clearFallbackTimer()
+        if (supported) window.speechSynthesis.cancel()
+        setSpeaking(false)
+        onEnd?.()
+      }),
+    [supported, clearFallbackTimer],
+  )
+
   // Stop any speech in flight if whatever's using this hook goes away —
   // e.g. the viewer unmounts mid-utterance when the musician navigates off.
   useEffect(() => cancel, [cancel])

@@ -73,6 +73,14 @@ export function VoiceBar({
   const [retryable, setRetryable] = useState(false)
   const [collapsed, setCollapsed] = useState(initialCollapsed)
   const inputRef = useRef<HTMLInputElement>(null)
+  const historyScrollRef = useRef<HTMLDivElement>(null)
+
+  // New confirmations append at the end of the (height-capped) history
+  // strip — keep the scroll pinned to the latest one.
+  useEffect(() => {
+    const el = historyScrollRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [history])
   const readbackMuted = useReadbackStore((s) => s.muted)
   const toggleReadbackMuted = useReadbackStore((s) => s.toggleMuted)
   const wakeWordArmed = useWakeWordStore((s) => s.armed)
@@ -318,7 +326,7 @@ export function VoiceBar({
             <>
               <div className="text-[13.5px] font-semibold text-pine">Listening…</div>
               <div className="mt-0.75 flex items-center gap-2 font-mono text-[12.5px] text-ink-soft">
-                <span>tap the mic to stop and send</span>
+                <span>sends automatically when you stop speaking — or tap the mic</span>
                 <button
                   onClick={() => recorder.cancel()}
                   className="cursor-pointer whitespace-nowrap border-none bg-transparent p-0 text-ghost underline hover:text-error"
@@ -392,16 +400,20 @@ export function VoiceBar({
             <span>“Hey Nota”</span>
           </button>
         </div>
-        <div className="flex flex-1 flex-wrap items-center justify-end gap-2">
-          {history.map((h, i) => (
-            <span
-              key={i}
-              className="flex min-h-10 items-center gap-1.75 rounded-pill border border-line bg-card px-3.25 py-1.75 font-sans text-[12.5px] text-muted"
-            >
-              <span className="text-pine">✓</span>
-              {h}
-            </span>
-          ))}
+        <div className="flex min-w-0 flex-1 items-start justify-end gap-2">
+          {/* Capped at roughly three chip rows; older confirmations scroll
+              rather than growing the whole panel taller. */}
+          <div ref={historyScrollRef} className="flex max-h-34 flex-wrap items-center justify-end gap-2 overflow-y-auto">
+            {history.map((h, i) => (
+              <span
+                key={i}
+                className="flex min-h-10 items-center gap-1.75 rounded-2xl border border-line bg-card px-3.5 py-1.75 font-sans text-[12.5px] text-muted"
+              >
+                <span className="text-pine">✓</span>
+                {h}
+              </span>
+            ))}
+          </div>
           <button
             aria-label="Hide command panel"
             onClick={toggleCollapsed}

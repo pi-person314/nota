@@ -151,6 +151,11 @@ def history(score_id):
             .limit(HISTORY_LIMIT)
             .all()
         )
+        # Queried newest-first so the limit keeps the most recent commands,
+        # then flipped back into chronological order: history reads oldest
+        # to newest, and callers keeping only the last few entries expect
+        # the newest ones to be at the end.
+        rows = list(reversed(rows))
         items = [
             {
                 "id": row.id,
