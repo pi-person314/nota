@@ -69,7 +69,7 @@ export function ScoreCard({ score, delay = 0 }: { score: Score; delay?: number }
     >
       <Thumbnail
         svg={score.thumbnail}
-        caption="verovio thumbnail"
+        caption="preview unavailable"
         className="h-32 gap-3 border-b border-line-faint px-5 py-4.5"
       />
       <div className="px-5 pb-4 pt-3.5">

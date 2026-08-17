@@ -90,6 +90,7 @@ interface ScoreState {
   uploadScore: (file: File) => Promise<UploadResult>
   loadScoreDetail: (id: string) => Promise<ActionResult>
   updateScore: (id: string, patch: Partial<Score>) => void
+  refreshThumbnail: (id: string, xml: string) => void
   renameScore: (id: string, title: string) => Promise<void>
   toggleStar: (id: string) => Promise<void>
   removeScore: (id: string) => Promise<void>
@@ -121,6 +122,28 @@ export const useScoreStore = create<ScoreState>((set, get) => ({
           loading: false,
         }
       })
+
+      // Backfill thumbnails persisted server-side but not yet in memory
+      // (e.g. after a page refresh). Runs in the background so it never
+      // delays fetchScores' own resolution.
+      const byId = new Map(get().scores.map((sc) => [sc.id, sc]))
+      for (const sum of summaries) {
+        if (!sum.has_thumbnail) continue
+        const existing = byId.get(sum.id)
+        if (!existing || existing.thumbnail) continue
+        api
+          .getThumbnail(sum.id)
+          .then((thumb) => {
+            set((s) => ({
+              scores: s.scores.map((sc) =>
+                sc.id === sum.id
+                  ? { ...sc, thumbnail: thumb.svg, totalPages: thumb.page_count ?? sc.totalPages }
+                  : sc,
+              ),
+            }))
+          })
+          .catch(() => {})
+      }
     } catch (err) {
       set({ loading: false, loadError: errorMessage(err, 'Could not load your scores.') })
     }
@@ -149,6 +172,11 @@ export const useScoreStore = create<ScoreState>((set, get) => ({
               : sc,
           ),
         }))
+        if (rendered) {
+          // Persistence is cosmetic — local state already reflects the
+          // render, so a failure here is silently ignored.
+          api.putThumbnail(summary.id, rendered.svg, rendered.pageCount).catch(() => {})
+        }
       } catch {
         // The score is already saved server-side; a failed thumbnail
         // render is cosmetic only, so just clear the pending flag.
@@ -184,6 +212,20 @@ export const useScoreStore = create<ScoreState>((set, get) => ({
     set((s) => ({
       scores: s.scores.map((sc) => (sc.id === id ? { ...sc, ...patch } : sc)),
     })),
+
+  // Re-renders a score's thumbnail after its MusicXML changes (command,
+  // undo, redo) and keeps the server copy in sync. Never throws and never
+  // awaited by callers — a failed render/persist just leaves the previous
+  // thumbnail in place.
+  refreshThumbnail: (id, xml) => {
+    renderThumbnail(xml, 'xml')
+      .then((rendered) => {
+        if (!rendered) return
+        get().updateScore(id, { thumbnail: rendered.svg, totalPages: rendered.pageCount })
+        api.putThumbnail(id, rendered.svg, rendered.pageCount).catch(() => {})
+      })
+      .catch(() => {})
+  },
 
   renameScore: async (id, title) => {
     const trimmed = title.trim()

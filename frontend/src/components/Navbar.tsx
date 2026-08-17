@@ -72,7 +72,13 @@ export function Navbar() {
               role="menu"
               className="absolute right-0 top-11 z-20 w-44 rounded-card border border-line bg-card py-1.5 shadow-bloom"
             >
-              <MenuItem label="Settings" onClick={() => setMenuOpen(false)} />
+              <MenuItem
+                label="Settings"
+                onClick={() => {
+                  setMenuOpen(false)
+                  navigate('/settings')
+                }}
+              />
               <MenuItem
                 label={theme === 'light' ? 'Dark mode' : 'Light mode'}
                 onClick={() => {

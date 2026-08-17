@@ -51,6 +51,7 @@ export function Viewer() {
 function ViewerInner({ scoreId }: { scoreId: string }) {
   const score = useScoreStore((s) => s.scores.find((sc) => sc.id === scoreId))!
   const updateScore = useScoreStore((s) => s.updateScore)
+  const refreshThumbnail = useScoreStore((s) => s.refreshThumbnail)
   const renameScore = useScoreStore((s) => s.renameScore)
   const loadScoreDetail = useScoreStore((s) => s.loadScoreDetail)
   const theme = useThemeStore((s) => s.theme)
@@ -268,6 +269,7 @@ function ViewerInner({ scoreId }: { scoreId: string }) {
       try {
         const result = await api.sendCommand(scoreId, text)
         updateScore(scoreId, { data: result.musicxml, format: 'xml', modifiedAt: Date.now(), lastSaid: text })
+        refreshThumbnail(scoreId, result.musicxml)
         setHighlightIds(result.changed_element_ids)
 
         if (result.needs_clarification) {
@@ -313,7 +315,7 @@ function ViewerInner({ scoreId }: { scoreId: string }) {
         setCommandBusy(false)
       }
     },
-    [commandBusy, clearHighlights, scoreId, updateScore, cancelSpeech, speak],
+    [commandBusy, clearHighlights, scoreId, updateScore, refreshThumbnail, cancelSpeech, speak],
   )
 
   const handleUndo = useCallback(async () => {
@@ -321,6 +323,7 @@ function ViewerInner({ scoreId }: { scoreId: string }) {
     try {
       const result = await api.undo(scoreId)
       updateScore(scoreId, { data: result.musicxml, format: 'xml', modifiedAt: Date.now() })
+      refreshThumbnail(scoreId, result.musicxml)
       setToast(result.summary ? { kind: 'notice', text: result.summary } : null)
     } catch (err) {
       if (err instanceof ApiRequestError && err.code === 'NOTHING_TO_UNDO') {
@@ -329,13 +332,14 @@ function ViewerInner({ scoreId }: { scoreId: string }) {
         setToast({ kind: 'error', text: err instanceof Error ? err.message : 'Undo failed.' })
       }
     }
-  }, [clearHighlights, scoreId, updateScore])
+  }, [clearHighlights, scoreId, updateScore, refreshThumbnail])
 
   const handleRedo = useCallback(async () => {
     clearHighlights()
     try {
       const result = await api.redo(scoreId)
       updateScore(scoreId, { data: result.musicxml, format: 'xml', modifiedAt: Date.now() })
+      refreshThumbnail(scoreId, result.musicxml)
       setToast(result.summary ? { kind: 'notice', text: result.summary } : null)
     } catch (err) {
       if (err instanceof ApiRequestError && err.code === 'NOTHING_TO_REDO') {
@@ -344,7 +348,7 @@ function ViewerInner({ scoreId }: { scoreId: string }) {
         setToast({ kind: 'error', text: err instanceof Error ? err.message : 'Redo failed.' })
       }
     }
-  }, [clearHighlights, scoreId, updateScore])
+  }, [clearHighlights, scoreId, updateScore, refreshThumbnail])
 
   const commitRename = () => {
     const title = draftTitle.trim()
@@ -424,38 +428,40 @@ function ViewerInner({ scoreId }: { scoreId: string }) {
         </div>
       </div>
 
-      <div ref={areaRef} className="relative flex-1 overflow-auto">
-        <div className="flex min-h-full items-start justify-center gap-6 px-6 py-9">
-          {!hasData ? (
-            <div className="self-center font-mono text-[12.5px] text-ghost">
-              {detailLoading ? 'loading score…' : detailError ? (
-                <span className="text-error">{detailError}</span>
-              ) : (
-                'no score data yet'
-              )}
-            </div>
-          ) : error ? (
-            <div className="self-center text-sm text-error">Failed to load Verovio: {error}</div>
-          ) : isLoading ? (
-            <div className="self-center font-mono text-[12.5px] text-ghost">
-              warming up the engraver…
-            </div>
-          ) : (
-            <>
-              <div
-                className="shrink-0 border border-line-faint bg-card px-14 py-13 shadow-sheet"
-                style={{ width: sheetWidth }}
-              >
-                <div ref={leftRef} className="score-svg" />
+      <div className="relative flex-1 overflow-hidden">
+        <div ref={areaRef} className="h-full overflow-auto">
+          <div className="flex min-h-full items-start justify-center gap-6 px-6 py-9">
+            {!hasData ? (
+              <div className="self-center font-mono text-[12.5px] text-ghost">
+                {detailLoading ? 'loading score…' : detailError ? (
+                  <span className="text-error">{detailError}</span>
+                ) : (
+                  'no score data yet'
+                )}
               </div>
-              <div
-                className="shrink-0 border border-line-faint bg-card px-14 py-13 shadow-sheet"
-                style={{ width: sheetWidth }}
-              >
-                <div ref={rightRef} className="score-svg" />
+            ) : error ? (
+              <div className="self-center text-sm text-error">Failed to load Verovio: {error}</div>
+            ) : isLoading ? (
+              <div className="self-center font-mono text-[12.5px] text-ghost">
+                warming up the engraver…
               </div>
-            </>
-          )}
+            ) : (
+              <>
+                <div
+                  className="shrink-0 border border-line-faint bg-card px-14 py-13 shadow-sheet"
+                  style={{ width: sheetWidth }}
+                >
+                  <div ref={leftRef} className="score-svg" />
+                </div>
+                <div
+                  className="shrink-0 border border-line-faint bg-card px-14 py-13 shadow-sheet"
+                  style={{ width: sheetWidth }}
+                >
+                  <div ref={rightRef} className="score-svg" />
+                </div>
+              </>
+            )}
+          </div>
         </div>
 
         {totalPages > 1 && (

@@ -14,6 +14,7 @@ the app.
 
 from __future__ import annotations
 
+import json
 import os
 import zlib
 from datetime import datetime, timezone
@@ -103,6 +104,59 @@ def write_xml(score_id: str, xml: str) -> None:
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         f.write(xml)
+
+
+def _thumbnail_path_for(file_path: str) -> str:
+    """Derive a thumbnail sidecar path from a score's stored file path."""
+    return os.path.splitext(file_path)[0] + ".thumb.json"
+
+
+def write_thumbnail(score_id: str, svg: str, page_count: int | None) -> None:
+    """Persist a rendered thumbnail as a JSON sidecar next to the score's
+    live MusicXML file.
+    """
+    path = path_for(score_id)
+    if path is None:
+        raise ScoreNotFoundError(score_id)
+    thumb_path = _thumbnail_path_for(path)
+    os.makedirs(os.path.dirname(thumb_path) or ".", exist_ok=True)
+    with open(thumb_path, "w", encoding="utf-8") as f:
+        json.dump({"svg": svg, "page_count": page_count}, f)
+
+
+def read_thumbnail(score_id: str) -> dict | None:
+    """Return the stored thumbnail dict for a score, or None if no
+    thumbnail has been saved (or the saved file is unreadable/corrupt).
+    """
+    path = path_for(score_id)
+    if path is None:
+        raise ScoreNotFoundError(score_id)
+    thumb_path = _thumbnail_path_for(path)
+    if not os.path.exists(thumb_path):
+        return None
+    try:
+        with open(thumb_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def has_thumbnail(score_id: str) -> bool:
+    """Cheap existence check for a score's thumbnail sidecar file.
+
+    Returns False (never raises) if the score itself doesn't exist.
+    """
+    path = path_for(score_id)
+    if path is None:
+        return False
+    return has_thumbnail_at(path)
+
+
+def has_thumbnail_at(file_path: str) -> bool:
+    """Existence check for the thumbnail sidecar of a score whose live
+    file path is already known, avoiding a database lookup.
+    """
+    return os.path.exists(_thumbnail_path_for(file_path))
 
 
 def touch_modified(score_id: str) -> None:
@@ -223,5 +277,9 @@ def delete_score_files(score_id: str) -> None:
     with db.session_scope() as session:
         session.query(models.Snapshot).filter_by(score_id=score_id).delete()
         session.query(models.CommandLog).filter_by(score_id=score_id).delete()
-    if path and os.path.exists(path):
-        os.remove(path)
+    if path:
+        if os.path.exists(path):
+            os.remove(path)
+        thumb_path = _thumbnail_path_for(path)
+        if os.path.exists(thumb_path):
+            os.remove(thumb_path)

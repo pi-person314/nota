@@ -226,3 +226,143 @@ def test_scores_routes_require_login(client):
     assert resp.status_code == 401
     resp = client.get("/api/scores/anything/export")
     assert resp.status_code == 401
+
+
+# --- Thumbnail ---------------------------------------------------------
+
+SAMPLE_SVG = "<svg xmlns=\"http://www.w3.org/2000/svg\"><rect /></svg>"
+
+
+def test_thumbnail_requires_login(client):
+    resp = client.put("/api/scores/anything/thumbnail", json={"svg": SAMPLE_SVG})
+    assert resp.status_code == 401
+    resp = client.get("/api/scores/anything/thumbnail")
+    assert resp.status_code == 401
+
+
+def test_get_thumbnail_404_before_any_put(auth_client):
+    created = upload_score(auth_client)
+    resp = auth_client.get(f"/api/scores/{created['id']}/thumbnail")
+    assert resp.status_code == 404
+    assert resp.get_json()["error"] == "THUMBNAIL_NOT_FOUND"
+
+
+def test_put_then_get_thumbnail_roundtrip(auth_client):
+    created = upload_score(auth_client)
+    score_id = created["id"]
+
+    resp = auth_client.put(
+        f"/api/scores/{score_id}/thumbnail", json={"svg": SAMPLE_SVG, "page_count": 3}
+    )
+    assert resp.status_code == 200
+    assert resp.get_json() == {"ok": True}
+
+    resp = auth_client.get(f"/api/scores/{score_id}/thumbnail")
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["svg"] == SAMPLE_SVG
+    assert body["page_count"] == 3
+
+
+def test_put_thumbnail_without_page_count(auth_client):
+    created = upload_score(auth_client)
+    score_id = created["id"]
+
+    resp = auth_client.put(f"/api/scores/{score_id}/thumbnail", json={"svg": SAMPLE_SVG})
+    assert resp.status_code == 200
+
+    resp = auth_client.get(f"/api/scores/{score_id}/thumbnail")
+    assert resp.status_code == 200
+    assert resp.get_json()["page_count"] is None
+
+
+def test_has_thumbnail_appears_in_summaries(auth_client):
+    created = upload_score(auth_client)
+    score_id = created["id"]
+
+    resp = auth_client.get("/api/scores")
+    assert resp.get_json()[0]["has_thumbnail"] is False
+
+    resp = auth_client.get(f"/api/scores/{score_id}")
+    assert resp.get_json()["has_thumbnail"] is False
+
+    auth_client.put(f"/api/scores/{score_id}/thumbnail", json={"svg": SAMPLE_SVG})
+
+    resp = auth_client.get("/api/scores")
+    assert resp.get_json()[0]["has_thumbnail"] is True
+
+    resp = auth_client.get(f"/api/scores/{score_id}")
+    assert resp.get_json()["has_thumbnail"] is True
+
+
+def test_put_thumbnail_not_found_is_404(auth_client):
+    resp = auth_client.put("/api/scores/does-not-exist/thumbnail", json={"svg": SAMPLE_SVG})
+    assert resp.status_code == 404
+
+
+def test_put_thumbnail_rejects_empty_svg(auth_client):
+    created = upload_score(auth_client)
+    resp = auth_client.put(f"/api/scores/{created['id']}/thumbnail", json={"svg": ""})
+    assert resp.status_code == 422
+    assert resp.get_json()["error"] == "INVALID_THUMBNAIL"
+
+
+def test_put_thumbnail_rejects_non_svg_content(auth_client):
+    created = upload_score(auth_client)
+    resp = auth_client.put(
+        f"/api/scores/{created['id']}/thumbnail", json={"svg": "not an svg document"}
+    )
+    assert resp.status_code == 422
+    assert resp.get_json()["error"] == "INVALID_THUMBNAIL"
+
+
+def test_put_thumbnail_rejects_too_large_svg(auth_client):
+    created = upload_score(auth_client)
+    huge = "<svg>" + ("x" * 2_000_001)
+    resp = auth_client.put(f"/api/scores/{created['id']}/thumbnail", json={"svg": huge})
+    assert resp.status_code == 413
+    assert resp.get_json()["error"] == "THUMBNAIL_TOO_LARGE"
+
+
+def test_put_thumbnail_rejects_invalid_page_count(auth_client):
+    created = upload_score(auth_client)
+    resp = auth_client.put(
+        f"/api/scores/{created['id']}/thumbnail",
+        json={"svg": SAMPLE_SVG, "page_count": 0},
+    )
+    assert resp.status_code == 422
+    assert resp.get_json()["error"] == "INVALID_THUMBNAIL"
+
+    resp = auth_client.put(
+        f"/api/scores/{created['id']}/thumbnail",
+        json={"svg": SAMPLE_SVG, "page_count": "3"},
+    )
+    assert resp.status_code == 422
+    assert resp.get_json()["error"] == "INVALID_THUMBNAIL"
+
+
+def test_second_user_cannot_put_thumbnail_on_others_score(auth_client, second_auth_client):
+    created = upload_score(auth_client)
+    resp = second_auth_client.put(
+        f"/api/scores/{created['id']}/thumbnail", json={"svg": SAMPLE_SVG}
+    )
+    assert resp.status_code == 403
+
+
+def test_second_user_cannot_get_thumbnail_on_others_score(auth_client, second_auth_client):
+    created = upload_score(auth_client)
+    auth_client.put(f"/api/scores/{created['id']}/thumbnail", json={"svg": SAMPLE_SVG})
+    resp = second_auth_client.get(f"/api/scores/{created['id']}/thumbnail")
+    assert resp.status_code == 403
+
+
+def test_delete_score_removes_thumbnail(auth_client):
+    created = upload_score(auth_client)
+    score_id = created["id"]
+    auth_client.put(f"/api/scores/{score_id}/thumbnail", json={"svg": SAMPLE_SVG})
+
+    resp = auth_client.delete(f"/api/scores/{score_id}")
+    assert resp.status_code == 200
+
+    resp = auth_client.get(f"/api/scores/{score_id}/thumbnail")
+    assert resp.status_code == 404

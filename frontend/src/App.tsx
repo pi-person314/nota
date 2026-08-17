@@ -4,6 +4,7 @@ import { Landing } from './pages/Landing'
 import { Login, Signup } from './pages/Auth'
 import { Dashboard } from './pages/Dashboard'
 import { Viewer } from './pages/Viewer'
+import { Settings } from './pages/Settings'
 import { useAuthStore } from './store/authStore'
 
 function RequireAuth({ children }: { children: ReactNode }) {
@@ -45,6 +46,14 @@ function App() {
         element={
           <RequireAuth>
             <Viewer />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/settings"
+        element={
+          <RequireAuth>
+            <Settings />
           </RequireAuth>
         }
       />

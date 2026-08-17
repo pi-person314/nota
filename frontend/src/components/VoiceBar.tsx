@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { MicIcon, SpeakerIcon, SpeakerMuteIcon, WakeWordIcon, WakeWordOffIcon } from './icons'
+import {
+  ChevronDownIcon,
+  ChevronUpIcon,
+  MicIcon,
+  SpeakerIcon,
+  SpeakerMuteIcon,
+  WakeWordIcon,
+  WakeWordOffIcon,
+} from './icons'
 import { api, ApiRequestError } from '../lib/api'
 import { useVoiceRecorder } from '../hooks/useVoiceRecorder'
 import { useWakeWord } from '../hooks/useWakeWord'
@@ -41,6 +49,12 @@ interface VoiceBarProps {
 // bounce it with EMPTY_TRANSCRIPT, so it's handled here instead.
 const MIN_TRANSCRIPT_LENGTH = 2
 
+const COLLAPSED_STORAGE_KEY = 'nota-voicebar-collapsed'
+
+function initialCollapsed(): boolean {
+  return localStorage.getItem(COLLAPSED_STORAGE_KEY) === 'true'
+}
+
 export function VoiceBar({
   history,
   busy,
@@ -57,6 +71,7 @@ export function VoiceBar({
 }: VoiceBarProps) {
   const [draft, setDraft] = useState('')
   const [retryable, setRetryable] = useState(false)
+  const [collapsed, setCollapsed] = useState(initialCollapsed)
   const inputRef = useRef<HTMLInputElement>(null)
   const readbackMuted = useReadbackStore((s) => s.muted)
   const toggleReadbackMuted = useReadbackStore((s) => s.toggleMuted)
@@ -102,9 +117,32 @@ export function VoiceBar({
   const recorderRef = useRef(recorder)
   recorderRef.current = recorder
 
+  const toggleCollapsed = useCallback(() => {
+    setCollapsed((c) => {
+      const next = !c
+      localStorage.setItem(COLLAPSED_STORAGE_KEY, String(next))
+      return next
+    })
+  }, [])
+
+  // Bring the panel back into view whenever the musician's attention is
+  // needed: a clarifying question just arrived, or a recording just started
+  // (including one triggered hands-free by the wake word while collapsed).
+  // Scoped to these two signals only, so a manual collapse mid-conversation
+  // isn't immediately undone by this effect re-running for unrelated reasons.
   useEffect(() => {
-    if (clarification) inputRef.current?.focus()
-  }, [clarification])
+    if (clarification !== null || recorder.status !== 'idle') {
+      setCollapsed(false)
+      localStorage.setItem(COLLAPSED_STORAGE_KEY, 'false')
+    }
+  }, [clarification, recorder.status])
+
+  // Depends on `collapsed` too: when a clarification triggers auto-expand,
+  // the input doesn't exist in the DOM until the expand takes effect, so
+  // this needs to re-run once `collapsed` flips to false.
+  useEffect(() => {
+    if (clarification && !collapsed) inputRef.current?.focus()
+  }, [clarification, collapsed])
 
   // Surface permission / support errors from the recorder through the same
   // toast the rest of the voice pipeline uses.
@@ -197,6 +235,41 @@ export function VoiceBar({
         : recorder.status === 'processing'
           ? 'Transcribing'
           : 'Start listening'
+
+  // Same text/color the expanded toast line uses, plus a fallback hint for
+  // when the panel is collapsed and there's nothing to report.
+  const statusText = clarification
+    ? `Nota asks: “${clarification}”`
+    : toast
+      ? toast.text
+      : 'command panel hidden — say “Hey Nota” or expand to type'
+
+  const statusColor = clarification
+    ? 'text-brass'
+    : toast?.kind === 'error'
+      ? 'text-error'
+      : toast?.kind === 'notice'
+        ? 'text-muted'
+        : toast?.kind === 'confirmation'
+          ? 'text-pine'
+          : 'text-ghost'
+
+  if (collapsed) {
+    return (
+      <div className="border-t border-line bg-bg">
+        <div className="flex items-center justify-between gap-3 px-7 py-2.5">
+          <span className={`truncate font-mono text-[12.5px] ${statusColor}`}>{statusText}</span>
+          <button
+            aria-label="Show command panel"
+            onClick={toggleCollapsed}
+            className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-pill border border-line bg-transparent text-muted hover:border-pine hover:text-pine"
+          >
+            <ChevronUpIcon />
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="border-t border-line bg-bg">
@@ -319,19 +392,24 @@ export function VoiceBar({
             <span>“Hey Nota”</span>
           </button>
         </div>
-        {history.length > 0 && (
-          <div className="flex flex-1 flex-wrap justify-end gap-2">
-            {history.map((h, i) => (
-              <span
-                key={i}
-                className="flex min-h-10 items-center gap-1.75 rounded-pill border border-line bg-card px-3.25 py-1.75 font-sans text-[12.5px] text-muted"
-              >
-                <span className="text-pine">✓</span>
-                {h}
-              </span>
-            ))}
-          </div>
-        )}
+        <div className="flex flex-1 flex-wrap items-center justify-end gap-2">
+          {history.map((h, i) => (
+            <span
+              key={i}
+              className="flex min-h-10 items-center gap-1.75 rounded-pill border border-line bg-card px-3.25 py-1.75 font-sans text-[12.5px] text-muted"
+            >
+              <span className="text-pine">✓</span>
+              {h}
+            </span>
+          ))}
+          <button
+            aria-label="Hide command panel"
+            onClick={toggleCollapsed}
+            className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-pill border border-line bg-transparent text-muted hover:border-pine hover:text-pine"
+          >
+            <ChevronDownIcon />
+          </button>
+        </div>
       </div>
 
       <form onSubmit={submit} className="flex items-center gap-2.5 px-7 pb-5.5">

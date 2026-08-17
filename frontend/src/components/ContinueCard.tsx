@@ -43,7 +43,7 @@ export function ContinueCard({ score }: { score: Score }) {
       </div>
       <Thumbnail
         svg={score.thumbnail}
-        caption={`verovio render — page ${score.lastPage}`}
+        caption="preview unavailable"
         className="h-35 w-55 shrink-0 rounded-[3px] border border-line-faint bg-card px-4 py-4.5 max-md:w-full"
       />
     </div>

@@ -8,3 +8,4 @@ backend/venv/
 backend/data/
 backend/*.db
 backend/evals/results/*.json
+*.md

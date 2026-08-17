@@ -69,6 +69,7 @@ export interface ScoreSummary {
   created_at: string
   last_opened_at: string
   last_modified_at: string
+  has_thumbnail?: boolean
 }
 
 export interface ScorePart {
@@ -119,6 +120,11 @@ export interface TranscribeResult {
   text: string
 }
 
+export interface ThumbnailPayload {
+  svg: string
+  page_count: number | null
+}
+
 export const api = {
   signup(name: string, email: string, password: string) {
     return request<User>('/auth/signup', {
@@ -165,6 +171,15 @@ export const api = {
   },
   exportUrl(id: string) {
     return `${BASE}/scores/${id}/export`
+  },
+  getThumbnail(id: string) {
+    return request<ThumbnailPayload>(`/scores/${id}/thumbnail`)
+  },
+  putThumbnail(id: string, svg: string, pageCount?: number) {
+    return request<{ ok: boolean }>(`/scores/${id}/thumbnail`, {
+      method: 'PUT',
+      body: JSON.stringify(pageCount === undefined ? { svg } : { svg, page_count: pageCount }),
+    })
   },
 
   sendCommand(id: string, text: string) {

@@ -28,6 +28,8 @@ bp = Blueprint("scores", __name__, url_prefix="/api/scores")
 
 PDF_EXTENSION = ".pdf"
 
+MAX_THUMBNAIL_SVG_CHARS = 2_000_000
+
 SORT_FIELDS = {
     "last_opened": (models.Score.last_opened_at, True),
     "last_modified": (models.Score.last_modified_at, True),
@@ -49,6 +51,7 @@ def _score_summary(score: models.Score) -> dict:
         "created_at": iso_utc(score.created_at),
         "last_opened_at": iso_utc(score.last_opened_at),
         "last_modified_at": iso_utc(score.last_modified_at),
+        "has_thumbnail": storage.has_thumbnail_at(score.file_path),
     }
 
 
@@ -256,6 +259,49 @@ def delete_score(score_id):
             db_session.delete(score)
 
     return jsonify({"ok": True}), 200
+
+
+@bp.put("/<score_id>/thumbnail")
+@login_required
+def put_thumbnail(score_id):
+    with db_module.session_scope() as db_session:
+        _, err = _fetch_owned_score(db_session, score_id)
+        if err:
+            return err
+
+    data = request.get_json(silent=True) or {}
+    svg = data.get("svg")
+    if not isinstance(svg, str) or not svg:
+        return error_response(422, "INVALID_THUMBNAIL", "svg must be a non-empty string.")
+    if len(svg) > MAX_THUMBNAIL_SVG_CHARS:
+        return error_response(413, "THUMBNAIL_TOO_LARGE", "Thumbnail SVG is too large.")
+    if not svg.lstrip().startswith(("<svg", "<?xml")):
+        return error_response(422, "INVALID_THUMBNAIL", "svg does not look like an SVG document.")
+
+    page_count = data.get("page_count")
+    if page_count is not None:
+        if isinstance(page_count, bool) or not isinstance(page_count, int) or page_count <= 0:
+            return error_response(422, "INVALID_THUMBNAIL", "page_count must be a positive integer.")
+
+    storage.write_thumbnail(score_id, svg, page_count)
+    return jsonify({"ok": True}), 200
+
+
+@bp.get("/<score_id>/thumbnail")
+@login_required
+def get_thumbnail(score_id):
+    with db_module.session_scope() as db_session:
+        _, err = _fetch_owned_score(db_session, score_id)
+        if err:
+            return err
+
+    thumbnail = storage.read_thumbnail(score_id)
+    if thumbnail is None:
+        return error_response(404, "THUMBNAIL_NOT_FOUND", "No thumbnail stored for this score.")
+
+    return jsonify(
+        {"svg": thumbnail.get("svg"), "page_count": thumbnail.get("page_count")}
+    ), 200
 
 
 @bp.get("/<score_id>/export")

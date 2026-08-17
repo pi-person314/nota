@@ -113,6 +113,22 @@ export function WakeWordOffIcon({ size = 16, className, strokeWidth = 2 }: IconP
   )
 }
 
+export function ChevronDownIcon({ size = 16, className, strokeWidth = 2 }: IconProps) {
+  return (
+    <svg {...base(size, strokeWidth, className)}>
+      <polyline points="6 9 12 15 18 9" />
+    </svg>
+  )
+}
+
+export function ChevronUpIcon({ size = 16, className, strokeWidth = 2 }: IconProps) {
+  return (
+    <svg {...base(size, strokeWidth, className)}>
+      <polyline points="18 15 12 9 6 15" />
+    </svg>
+  )
+}
+
 export function GoogleIcon({ size = 16 }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden>
