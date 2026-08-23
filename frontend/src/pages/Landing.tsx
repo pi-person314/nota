@@ -178,7 +178,12 @@ export function Landing() {
       <div className="border-t border-line">
         <div className="mx-auto flex max-w-310 items-baseline justify-between px-12 py-7 max-md:px-6">
           <span className="font-display text-base text-ink">Nota</span>
-          <span className="text-[13px] text-faint">Built for musicians, by musicians. © 2026</span>
+          <span className="flex items-baseline gap-5 text-[13px] text-faint">
+            <Link to="/privacy" className="text-faint no-underline hover:text-pine">
+              Privacy
+            </Link>
+            Built for musicians, by musicians. © 2026
+          </span>
         </div>
       </div>
     </div>

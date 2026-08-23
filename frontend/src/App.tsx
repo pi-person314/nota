@@ -1,6 +1,7 @@
 import { useEffect, type ReactNode } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { Landing } from './pages/Landing'
+import { Privacy } from './pages/Privacy'
 import { Login, ResetPassword, Signup } from './pages/Auth'
 import { Dashboard } from './pages/Dashboard'
 import { Viewer } from './pages/Viewer'
@@ -34,6 +35,7 @@ function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
       <Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="/privacy" element={<Privacy />} />
       <Route
         path="/dashboard"
         element={
