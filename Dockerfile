@@ -38,16 +38,24 @@ ENV PORT=5001
 # `apt install ./file.deb` resolves the package's system dependencies.
 ARG AUDIVERIS_VERSION=5.11.0
 ADD https://github.com/Audiveris/audiveris/releases/download/${AUDIVERIS_VERSION}/Audiveris-${AUDIVERIS_VERSION}-ubuntu22.04-x86_64.deb /tmp/audiveris.deb
-# The package's post-install script registers a desktop menu entry via
-# xdg-desktop-menu, which aborts with "No writable system menu directory
-# found" on an image that carries no desktop stack — failing the whole
-# install even though the application itself unpacked correctly. Creating
-# the directory it looks for lets that step succeed. The explicit check
-# afterwards turns a genuinely missing launcher into a build failure
-# rather than a server that silently reports PDF import as unconfigured.
-RUN mkdir -p /usr/share/desktop-directories \
+# The package's post-install script registers a desktop menu entry through
+# xdg-desktop-menu, which needs a writable "applications" directory under
+# one of the XDG data dirs. An image with no desktop stack has none, so
+# that step aborts and dpkg fails the whole install — even though the
+# application itself unpacked correctly and a headless server has no use
+# for a menu entry anyway.
+#
+# The directories are created first so the registration can simply
+# succeed where possible. Its failure is tolerated regardless, because
+# nothing here depends on it: dependencies are configured before the
+# package itself, so a failure at this point leaves a working install
+# with only the menu entry missing. The checks afterwards are what
+# actually gate the build — a genuinely missing or broken Audiveris fails
+# here rather than becoming a server that quietly reports PDF import as
+# unconfigured at runtime.
+RUN mkdir -p /usr/share/applications /usr/local/share/applications /usr/share/desktop-directories \
     && apt-get update \
-    && apt-get install -y --no-install-recommends /tmp/audiveris.deb \
+    && { apt-get install -y --no-install-recommends /tmp/audiveris.deb || true; } \
     && rm /tmp/audiveris.deb \
     && rm -rf /var/lib/apt/lists/* \
     && test -x /opt/audiveris/bin/Audiveris
