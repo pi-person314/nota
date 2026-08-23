@@ -20,7 +20,7 @@ from typing import Annotated, Optional
 from mcp.server.fastmcp import FastMCP
 from pydantic import Field
 
-from . import tools
+from . import pitch_tools, rhythm_tools, tools
 from .. import storage
 
 mcp = FastMCP(
@@ -306,6 +306,178 @@ def remove_notation(
 ) -> dict:
     return tools.remove_notation(
         score_id, measure=measure, beat=beat, notation_type=notation_type, part=part
+    )
+
+
+@mcp.tool(
+    description=(
+        "Change the pitch of an existing note, keeping its duration and any "
+        "attached markings. Target the note by beat, or by from_pitch (its "
+        "current pitch) when no beat was given — e.g. 'change the F in bar 3 "
+        "to F sharp'. A chord requires from_pitch to say which of its notes to "
+        "change. If the note is tied, the whole tied group changes together. "
+        "A pitch with no octave number lands in the octave nearest the note's "
+        "current pitch."
+    )
+)
+def change_pitch(
+    score_id: ScoreId,
+    measure: MeasureArg,
+    pitch: Annotated[
+        str,
+        Field(
+            description=(
+                "The new pitch, e.g. 'C#', 'B flat', 'F natural', optionally with an "
+                "octave number: 'C#4'."
+            )
+        ),
+    ],
+    beat: Annotated[
+        Optional[float],
+        Field(default=None, description="Beat the note starts on. Omit to target by from_pitch."),
+    ] = None,
+    from_pitch: Annotated[
+        Optional[str],
+        Field(
+            default=None,
+            description=(
+                "The note's current pitch, e.g. 'F' or 'Bb4'. Required when no beat is "
+                "given, or when the target is a chord (to pick which of its notes)."
+            ),
+        ),
+    ] = None,
+    part: PartArg = None,
+) -> dict:
+    return pitch_tools.change_pitch(
+        score_id, measure=measure, pitch=pitch, beat=beat, from_pitch=from_pitch, part=part
+    )
+
+
+@mcp.tool(
+    description=(
+        "Transpose every note in a measure range by a named interval, e.g. "
+        "'transpose measures 1 through 8 up an octave'. Omit end_measure to "
+        "transpose a single measure."
+    )
+)
+def transpose(
+    score_id: ScoreId,
+    interval: Annotated[
+        str,
+        Field(description="One of: octave, half_step, semitone, whole_step, whole_tone, minor_second, major_second, minor_third, major_third, perfect_fourth, tritone, perfect_fifth, minor_sixth, major_sixth, minor_seventh, major_seventh."),
+    ],
+    direction: Annotated[str, Field(description="'up' or 'down'.")],
+    start_measure: MeasureArg,
+    end_measure: Annotated[
+        Optional[int],
+        Field(default=None, description="Last measure of the range. Omit for a single measure."),
+    ] = None,
+    part: PartArg = None,
+) -> dict:
+    return pitch_tools.transpose(
+        score_id,
+        interval=interval,
+        direction=direction,
+        start_measure=start_measure,
+        end_measure=end_measure,
+        part=part,
+    )
+
+
+@mcp.tool(
+    description=(
+        "Write a note at a measure/beat, overwriting whatever currently occupies "
+        "that time span (a partially covered note keeps its remainder as a rest; "
+        "nothing shifts). The duration must fit inside the measure — a value that "
+        "would cross the barline returns DURATION_CROSSES_BARLINE. A pitch with "
+        "no octave number lands in the octave nearest the surrounding notes."
+    )
+)
+def add_note(
+    score_id: ScoreId,
+    measure: MeasureArg,
+    beat: BeatArg,
+    pitch: Annotated[
+        str,
+        Field(
+            description=(
+                "The pitch to write, e.g. 'C#', 'B flat', optionally with an octave "
+                "number: 'C#4'."
+            )
+        ),
+    ],
+    duration: Annotated[
+        str,
+        Field(description="One of: whole, dotted_whole, half, dotted_half, quarter, dotted_quarter, eighth, dotted_eighth, sixteenth, dotted_sixteenth, thirty_second."),
+    ],
+    part: PartArg = None,
+) -> dict:
+    return rhythm_tools.add_note(
+        score_id, measure=measure, beat=beat, pitch=pitch, duration=duration, part=part
+    )
+
+
+@mcp.tool(
+    description=(
+        "Change the written duration of the note starting at a measure/beat, "
+        "keeping its pitch and attached markings. Lengthening overwrites what "
+        "follows within the measure; shortening fills the freed time with a rest."
+    )
+)
+def set_duration(
+    score_id: ScoreId,
+    measure: MeasureArg,
+    beat: BeatArg,
+    duration: Annotated[
+        str,
+        Field(description="One of: whole, dotted_whole, half, dotted_half, quarter, dotted_quarter, eighth, dotted_eighth, sixteenth, dotted_sixteenth, thirty_second."),
+    ],
+    part: PartArg = None,
+) -> dict:
+    return rhythm_tools.set_duration(
+        score_id, measure=measure, beat=beat, duration=duration, part=part
+    )
+
+
+@mcp.tool(
+    description=(
+        "Delete notes, replacing them with rests of the same length (nothing "
+        "shifts). With measure and beat: the single note starting there — also "
+        "use this for 'put a rest on beat 2'. With only measure: clears the "
+        "whole measure to rests. With end_measure (and optionally end_beat): "
+        "clears the whole range."
+    )
+)
+def delete_note(
+    score_id: ScoreId,
+    measure: MeasureArg,
+    beat: Annotated[
+        Optional[float],
+        Field(default=None, description="Beat the note starts on. Omit to clear the whole measure."),
+    ] = None,
+    end_measure: Annotated[
+        Optional[int],
+        Field(default=None, description="Last measure of a range to clear. Omit for a single measure."),
+    ] = None,
+    end_beat: Annotated[
+        Optional[float],
+        Field(
+            default=None,
+            description=(
+                "Beat in end_measure the cleared range runs through (the note starting "
+                "there is included). Omit to clear through the end of end_measure."
+            ),
+        ),
+    ] = None,
+    part: PartArg = None,
+) -> dict:
+    return rhythm_tools.delete_note(
+        score_id,
+        measure=measure,
+        beat=beat,
+        end_measure=end_measure,
+        end_beat=end_beat,
+        part=part,
     )
 
 

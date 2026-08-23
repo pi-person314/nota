@@ -197,10 +197,23 @@ def find_note_at(measure: m21.stream.Measure, beat: float):
             if note_beats
             else "none — the measure has no notes"
         )
+        # Say explicitly when the requested position falls on a rest: the
+        # beat list below names where NOTES start, and a caller hunting for
+        # a rest must not mistake those for rest positions.
+        rest_here = any(
+            abs(rest.offset - offset) < _EPSILON
+            or rest.offset - _EPSILON <= offset < rest.offset + rest.duration.quarterLength - _EPSILON
+            for rest in measure.recurse().getElementsByClass(m21.note.Rest)
+        )
+        rest_clause = (
+            " That position falls on a rest, and rests cannot be targeted as notes."
+            if rest_here
+            else ""
+        )
         raise ToolError(
             ErrorCode.NO_NOTE_AT_POSITION,
-            f"No note at measure {measure.number} beat {_format_beat(beat)}. "
-            f"Notes in that measure start at beat(s): {nearest}.",
+            f"No note starts at measure {measure.number} beat {_format_beat(beat)}.{rest_clause} "
+            f"The notes (not rests) in that measure start at beat(s): {nearest}.",
         )
     return chosen
 

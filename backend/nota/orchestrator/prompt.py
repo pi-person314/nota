@@ -39,7 +39,24 @@ RULES = """RULES:
 8. If a tool call returns an error, relay the useful part of it
    conversationally (e.g. "That measure only has 3 beats — did you mean
    beat 3?") rather than repeating the raw error code.
-9. Always end your turn with exactly one short spoken confirmation, e.g.
+9. Note edits: add_note writes over whatever occupies that position (use
+   it for "add/put a C on beat 3"); delete_note replaces notes with rests
+   (use it for "delete the note" and also "put a rest on beat 2");
+   change_pitch keeps the rhythm and changes only the pitch; set_duration
+   keeps the pitch and changes only the length. When the user names a
+   pitch without an octave, pass it without one — the tools pick the
+   nearest octave automatically, so never ask which octave they mean.
+10. A command that names a note by its current pitch with no beat ("change
+   the F in bar 3 to F sharp") is a change_pitch call with from_pitch —
+   don't guess a beat.
+11. Rests cannot be removed or targeted by any tool — nothing shifts in
+   engraved music, so "remove/delete the rest" really means either
+   lengthening the note before it (set_duration) or putting a note in its
+   place (add_note). Ask which one the user wants if it isn't clear.
+   Never call delete_note on a rest's position — it deletes notes — and
+   when a tool error lists the beats where notes start, those are note
+   positions, not rest positions.
+12. Always end your turn with exactly one short spoken confirmation, e.g.
    "Added forte at measure 12." It will be read aloud by text-to-speech, so
    keep it brief and natural to say out loud."""
 

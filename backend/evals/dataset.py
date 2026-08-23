@@ -144,6 +144,38 @@ CASES: list[dict] = [
         expect_tools(tc("redo")),
         setup_transcripts=["forte at measure 4 beat 1", "undo that"],
     ),
+    case(
+        "simple_change_pitch",
+        "simple",
+        "change the note at measure 4 beat 2 to a C sharp",
+        expect_tools(tc("change_pitch", measure=4, beat=2)),
+    ),
+    case(
+        "simple_add_note",
+        "simple",
+        "add a quarter note G on beat 3 of measure 5",
+        expect_tools(tc("add_note", measure=5, beat=3, duration="quarter")),
+    ),
+    case(
+        "simple_set_duration",
+        "simple",
+        "make the note at measure 6 beat 1 a half note",
+        expect_tools(tc("set_duration", measure=6, beat=1, duration="half")),
+    ),
+    case(
+        "simple_delete_note",
+        "simple",
+        "delete the note at measure 7 beat 2",
+        expect_tools(tc("delete_note", measure=7, beat=2)),
+    ),
+    case(
+        "simple_transpose",
+        "simple",
+        "transpose measures 1 through 8 up an octave",
+        expect_tools(
+            tc("transpose", interval="octave", direction="up", start_measure=1, end_measure=8)
+        ),
+    ),
     # -- synonyms --------------------------------------------------------------
     case(
         "syn_bar_for_measure",
@@ -205,6 +237,12 @@ CASES: list[dict] = [
             expect_tools(tc("add_dynamic", measure=11, beat=2, dynamic="sfz")),
             expect_tools(tc("add_dynamic", measure=11, beat=2, dynamic="sf")),
         ),
+    ),
+    case(
+        "syn_rest_for_delete",
+        "synonyms",
+        "put a rest on beat 2 of measure 3",
+        expect_tools(tc("delete_note", measure=3, beat=2)),
     ),
     # -- ranges: one ranged call, never per-note calls --------------------------
     case(

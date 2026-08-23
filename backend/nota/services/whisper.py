@@ -23,7 +23,10 @@ LEXICON_PROMPT = (
     "diminuendo, sforzando, fortissimo, pianissimo, mezzo forte, mezzo piano, "
     "staccato, staccatissimo, marcato, tenuto, legato, slur, accent, fermata, "
     "trill, mordent, pizzicato, arco, down-bow, up-bow, sul ponticello, "
-    "rehearsal mark, ritardando, accelerando, a tempo, hairpin, dolce."
+    "rehearsal mark, ritardando, accelerando, a tempo, hairpin, dolce, "
+    "sharp, flat, natural, octave, transpose, semitone, whole step, "
+    "whole note, half note, quarter note, eighth note, sixteenth note, "
+    "dotted quarter, dotted half, rest, tie, C sharp, B flat."
 )
 
 _client_lock = threading.Lock()

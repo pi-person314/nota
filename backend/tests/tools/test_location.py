@@ -88,3 +88,38 @@ def test_display_part_names_no_duplicates_returns_plain_names():
     score = build_simple_4_4()
     names = location.display_part_names(list(score.parts))
     assert names == ["Violin"]
+
+
+def _measure_with_rest_gap():
+    """One 4/4 measure: quarter C4, quarter rest, half D4 — so beat 2
+    falls on a rest and beats 1 and 3 hold notes.
+    """
+    import music21 as m21
+
+    measure = m21.stream.Measure(number=1)
+    measure.append(m21.meter.TimeSignature("4/4"))
+    measure.append(m21.note.Note("C4", quarterLength=1.0))
+    measure.append(m21.note.Rest(quarterLength=1.0))
+    measure.append(m21.note.Note("D4", quarterLength=2.0))
+    return measure
+
+
+def test_find_note_at_rest_position_says_it_is_a_rest():
+    measure = _measure_with_rest_gap()
+    with pytest.raises(ToolError) as excinfo:
+        location.find_note_at(measure, 2)
+    assert excinfo.value.code == ErrorCode.NO_NOTE_AT_POSITION
+    assert "falls on a rest" in excinfo.value.message
+    assert "not rests" in excinfo.value.message
+    assert "1, 3" in excinfo.value.message
+
+
+def test_find_note_at_empty_position_without_rest_has_no_rest_clause():
+    measure = _measure_with_rest_gap()
+    # Beat 1.5 is inside the sounding C4, not on any rest, and no note
+    # starts there either.
+    with pytest.raises(ToolError) as excinfo:
+        location.find_note_at(measure, 1.5)
+    assert excinfo.value.code == ErrorCode.NO_NOTE_AT_POSITION
+    assert "falls on a rest" not in excinfo.value.message
+    assert "not rests" in excinfo.value.message
