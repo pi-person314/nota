@@ -197,14 +197,41 @@ There is also an LLM eval harness (`backend/evals/`) that replays a dataset of s
 
 ## Deployment
 
-Nota deploys as **one Docker container on one machine with a persistent disk** (Fly.io, Render, or any VPS). The provided `Dockerfile` builds the frontend, then runs gunicorn serving both the API and the SPA.
+**Live instance:** [nota-bcb3.onrender.com](https://nota-bcb3.onrender.com)
 
-Two hard constraints to respect:
+Nota deploys as **one Docker container on one machine with a persistent disk** (Render, Fly.io, or any VPS). The provided `Dockerfile` builds the frontend, installs Audiveris, and runs gunicorn serving both the API and the SPA from a single origin.
 
-1. **Exactly one worker process.** Score locking, the parsed-score cache, and the MCP tool subprocess are all per-process; `gunicorn.conf.py` pins `workers = 1` (with threads for concurrency) deliberately. Do not scale by adding workers or replicas.
-2. **Persistent volume.** Point `DATABASE_URL` (e.g. `sqlite:////data/nota.db`) and `SCORE_STORAGE_DIR` (e.g. `/data/scores`) at a mounted volume, and back it up — it holds every user's scores.
+### Two hard constraints
 
-Production checklist: `APP_ENV=production`, HTTPS at the platform edge (the mic requires a secure context), real `SMTP_*` values (users are told to check their inbox), production `GOOGLE_REDIRECT_URI` registered in the Google console with the consent screen published, a strong `SECRET_KEY`, and quota limits tuned to taste.
+1. **Exactly one worker process.** Score locking, the parsed-score cache, and the MCP tool subprocess are all per-process; `gunicorn.conf.py` pins `workers = 1` (with threads for concurrency) deliberately. Never scale by adding workers or replicas — scale with `GUNICORN_THREADS`.
+2. **Persistent volume.** `DATABASE_URL` and `SCORE_STORAGE_DIR` must point at a mounted volume. In production the app **refuses to start** if either is a relative path, because a relative path resolves inside the container and would be silently erased on every deploy.
+
+### Deploying on Render
+
+1. **New → Web Service**, connect the repo. Render detects the `Dockerfile`; choose the **Starter** instance or larger (the free tier has no persistent disk, so all data would be lost on every deploy and idle spin-down).
+2. **Add a disk** before the first deploy: mount path `/data`, 1 GB is plenty to start.
+3. Set the environment variables below, then deploy. The first build takes roughly 5–10 minutes (npm build, music21, and Audiveris).
+4. Add the production callback `https://<your-service>.onrender.com/api/auth/google/callback` to your Google OAuth client, and publish the consent screen (or add test users while it stays in Testing).
+
+| Variable | Value |
+|---|---|
+| `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` | your API keys |
+| `SECRET_KEY` | a long random string (use Render's **Generate**) |
+| `DATABASE_URL` | `sqlite:////data/nota.db` — **four** slashes |
+| `SCORE_STORAGE_DIR` | `/data/scores` |
+| `APP_BASE_URL` | `https://<your-service>.onrender.com` |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | from Google Cloud Console |
+| `GOOGLE_REDIRECT_URI` | `https://<your-service>.onrender.com/api/auth/google/callback` |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM` | required in production — the UI tells users to check their inbox |
+
+Do **not** set `APP_ENV`, `FRONTEND_DIST_DIR`, `AUDIVERIS_PATH`, or `PORT`: the first three are baked into the image (setting them in the dashboard would override correct values with wrong ones), and Render injects `PORT` itself.
+
+### Operational notes
+
+- **Memory.** Audiveris is the memory-hungry part — budget ~2 GB for reliable PDF conversion. Everything else runs comfortably on Starter's 512 MB; on that tier, expect PDF import of dense scores to fail while the rest of the app is unaffected.
+- **Long operations.** PDF conversion runs as a background job, so Render's ~100 s proxy timeout doesn't apply to it. Voice commands normally finish well inside that window.
+- **Backups.** Render snapshots disks daily, but the volume holds every user's scores — pull your own copy of anything you'd hate to lose.
+- **Deploys** cause brief downtime (a disk can only attach to one instance), and any conversion in flight is reported as failed rather than silently lost.
 
 ## Project structure
 

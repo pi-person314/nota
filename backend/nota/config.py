@@ -16,6 +16,28 @@ class ConfigError(RuntimeError):
     """Raised when required configuration is missing."""
 
 
+# The largest audio file the transcription endpoint accepts. Defined here
+# rather than in the route so the request-body ceiling below can be sized
+# to accommodate it; `routes/transcribe.py` imports it from here.
+MAX_AUDIO_BYTES = 25 * 1024 * 1024
+
+# Headroom added on top of the largest body any single route accepts, so a
+# request sitting right at a route's own limit is still rejected by that
+# route (with its specific, actionable error) rather than by the blanket
+# body-size ceiling. Covers multipart framing around the file itself.
+_REQUEST_OVERHEAD_BYTES = 1024 * 1024
+
+
+def _sqlite_path(database_url: str) -> str | None:
+    """Return the filesystem path a SQLite URL points at, or None if the
+    URL isn't SQLite (e.g. PostgreSQL, which has no local path at all).
+    """
+    prefix = "sqlite:///"
+    if not database_url.startswith(prefix):
+        return None
+    return database_url[len(prefix) :]
+
+
 @dataclass(frozen=True)
 class Config:
     secret_key: str
@@ -34,6 +56,19 @@ class Config:
     @property
     def is_production(self) -> bool:
         return self.app_env == "production"
+
+    @property
+    def max_request_bytes(self) -> int:
+        """Ceiling for any request body, applied by Flask before the body
+        is buffered into memory.
+
+        Individual routes still enforce their own, tighter limits; this
+        exists so an oversized request is refused while it streams in
+        rather than after it has already been read into memory in full.
+        Sized to the largest body any route legitimately accepts, so it
+        never pre-empts a route's own clearer error message.
+        """
+        return max(self.max_upload_bytes, MAX_AUDIO_BYTES) + _REQUEST_OVERHEAD_BYTES
 
 
 def load_config(env: dict | None = None) -> Config:
@@ -54,7 +89,7 @@ def load_config(env: dict | None = None) -> Config:
     score_storage_dir = source.get("SCORE_STORAGE_DIR", "./data/scores")
 
     try:
-        max_upload_mb = int(source.get("MAX_UPLOAD_MB", "10"))
+        max_upload_mb = int(source.get("MAX_UPLOAD_MB", "25"))
     except ValueError as exc:
         raise ConfigError("MAX_UPLOAD_MB must be an integer") from exc
 
@@ -72,6 +107,9 @@ def load_config(env: dict | None = None) -> Config:
     # also serve the built SPA directly, e.g. for a single-instance deploy.
     frontend_dist_dir = source.get("FRONTEND_DIST_DIR") or None
 
+    if app_env == "production":
+        _require_absolute_data_paths(database_url, score_storage_dir)
+
     return Config(
         secret_key=secret_key,
         database_url=database_url,
@@ -82,3 +120,32 @@ def load_config(env: dict | None = None) -> Config:
         app_env=app_env,
         frontend_dist_dir=frontend_dist_dir,
     )
+
+
+def _require_absolute_data_paths(database_url: str, score_storage_dir: str) -> None:
+    """Refuse to start in production when the database or score files
+    would land on a relative path.
+
+    A relative path resolves against the working directory, which in a
+    container is part of the image rather than the mounted volume. The
+    app would run perfectly and quietly write every account and score
+    somewhere that is discarded on the next deploy, with no error to
+    reveal it until the data is already gone. Failing at startup turns
+    that silent, unrecoverable outcome into an obvious one.
+    """
+    sqlite_path = _sqlite_path(database_url)
+    if sqlite_path is not None and not os.path.isabs(sqlite_path):
+        raise ConfigError(
+            f"DATABASE_URL points at a relative path ({database_url!r}), which in "
+            "production would put the database inside the container instead of on "
+            "the mounted volume — every deploy would silently erase it. Use an "
+            "absolute path, e.g. sqlite:////data/nota.db (note the four slashes)."
+        )
+
+    if not os.path.isabs(score_storage_dir):
+        raise ConfigError(
+            f"SCORE_STORAGE_DIR points at a relative path ({score_storage_dir!r}), "
+            "which in production would store uploaded scores inside the container "
+            "instead of on the mounted volume — every deploy would silently erase "
+            "them. Use an absolute path, e.g. /data/scores."
+        )

@@ -10,14 +10,11 @@ import os
 from flask import Blueprint, jsonify, request
 
 from .. import quota
+from ..config import MAX_AUDIO_BYTES
 from ..services import whisper
 from ._helpers import current_user_id, error_response, login_required
 
 bp = Blueprint("transcribe", __name__, url_prefix="/api")
-
-# Whisper's own per-request upload limit; deliberately separate from
-# MAX_UPLOAD_MB (which governs score file uploads and is user-configurable).
-MAX_AUDIO_BYTES = 25 * 1024 * 1024
 
 
 @bp.post("/transcribe")

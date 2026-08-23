@@ -38,10 +38,19 @@ ENV PORT=5001
 # `apt install ./file.deb` resolves the package's system dependencies.
 ARG AUDIVERIS_VERSION=5.11.0
 ADD https://github.com/Audiveris/audiveris/releases/download/${AUDIVERIS_VERSION}/Audiveris-${AUDIVERIS_VERSION}-ubuntu22.04-x86_64.deb /tmp/audiveris.deb
-RUN apt-get update \
+# The package's post-install script registers a desktop menu entry via
+# xdg-desktop-menu, which aborts with "No writable system menu directory
+# found" on an image that carries no desktop stack — failing the whole
+# install even though the application itself unpacked correctly. Creating
+# the directory it looks for lets that step succeed. The explicit check
+# afterwards turns a genuinely missing launcher into a build failure
+# rather than a server that silently reports PDF import as unconfigured.
+RUN mkdir -p /usr/share/desktop-directories \
+    && apt-get update \
     && apt-get install -y --no-install-recommends /tmp/audiveris.deb \
     && rm /tmp/audiveris.deb \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && test -x /opt/audiveris/bin/Audiveris
 ENV AUDIVERIS_PATH=/opt/audiveris/bin/Audiveris
 
 # Audiveris ships no OCR language data; interactively it offers a download

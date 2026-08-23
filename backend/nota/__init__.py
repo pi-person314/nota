@@ -5,9 +5,9 @@ from __future__ import annotations
 import importlib
 import logging
 
-from flask import Flask, abort, send_from_directory
+from flask import Flask, abort, jsonify, send_from_directory
 from flask_cors import CORS
-from werkzeug.exceptions import NotFound
+from werkzeug.exceptions import NotFound, RequestEntityTooLarge
 
 from . import conversion
 from . import db as db_module
@@ -37,6 +37,13 @@ def create_app(env: dict | None = None) -> Flask:
     # the session cookie on that navigation while "Strict" would drop it and
     # break login. SESSION_COOKIE_SECURE additionally requires HTTPS, which
     # only holds once we're actually deployed behind TLS.
+    # Refuse an oversized request body while it is still streaming in,
+    # rather than after Werkzeug has buffered the whole thing into memory
+    # for a route to measure and reject. Routes keep their own tighter
+    # limits; this is the backstop that keeps a single huge upload from
+    # exhausting a small instance's memory.
+    app.config["MAX_CONTENT_LENGTH"] = cfg.max_request_bytes
+
     app.config["SESSION_COOKIE_HTTPONLY"] = True
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
     if cfg.is_production:
@@ -68,6 +75,23 @@ def create_app(env: dict | None = None) -> Flask:
 
     if cfg.frontend_dist_dir:
         _register_spa(app, cfg.frontend_dist_dir)
+
+    @app.errorhandler(RequestEntityTooLarge)
+    def _too_large(_exc):
+        # Werkzeug's own 413 is an HTML page; every other error this API
+        # returns is JSON in the {"error": CODE, "message": ...} shape the
+        # frontend knows how to read, so this one matches.
+        return (
+            jsonify(
+                {
+                    "error": "FILE_TOO_LARGE",
+                    "message": (
+                        f"Request exceeds the {cfg.max_request_bytes // (1024 * 1024)} MB limit."
+                    ),
+                }
+            ),
+            413,
+        )
 
     return app
 
