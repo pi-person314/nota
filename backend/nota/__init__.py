@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 import importlib
+import logging
 
 from flask import Flask, abort, send_from_directory
 from flask_cors import CORS
 from werkzeug.exceptions import NotFound
 
+from . import conversion
 from . import db as db_module
 from . import storage
 from .config import load_config
+
+logger = logging.getLogger(__name__)
 
 
 def create_app(env: dict | None = None) -> Flask:
@@ -50,6 +54,15 @@ def create_app(env: dict | None = None) -> Flask:
 
     db_module.init_db(cfg.database_url)
     storage.configure(database_url=cfg.database_url, score_storage_dir=cfg.score_storage_dir)
+
+    # Clean up any PDF conversion left stranded `queued`/`running` by a
+    # previous process life (the in-process worker pool that runs them
+    # doesn't survive a restart). Best-effort: a failure here is logged,
+    # never allowed to stop the app from starting.
+    try:
+        conversion.reconcile_interrupted_jobs()
+    except Exception:
+        logger.exception("Failed to reconcile interrupted conversion jobs at startup.")
 
     _register_blueprints(app)
 

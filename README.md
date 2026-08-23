@@ -155,7 +155,9 @@ Register the same redirect URI in the Google console, and while the OAuth consen
 | `AUDIVERIS_PATH` | *(unset)* | Full path to the Audiveris launcher. PDF upload is disabled while unset |
 | `OMR_TIMEOUT_S` | `180` | Per-PDF conversion budget |
 
-Install [Audiveris](https://audiveris.github.io/audiveris/) separately. Converted scores pass a quality gate and are badged **PDF** in the library — optical recognition is genuinely not 100% reliable, so always check converted scores against the original.
+For local dev, install [Audiveris](https://audiveris.github.io/audiveris/) separately and point `AUDIVERIS_PATH` at its launcher. The production Docker image already bundles Audiveris (with its own Java runtime and English OCR data) and sets `AUDIVERIS_PATH` for you. Converted scores pass a quality gate and are badged **PDF** in the library — optical recognition is genuinely not 100% reliable, so always check converted scores against the original.
+
+PDF conversion runs as a **background job**: the upload request returns immediately with a job id, and the browser polls for progress, so no proxy request timeout applies no matter how long recognition takes. Conversions are processed one at a time (Audiveris is memory-hungry — budget ~2 GB of RAM for real scores), each user may have at most 3 conversions in flight, and a job interrupted by a server restart is reported as failed rather than silently lost.
 
 ### Abuse / cost protection
 

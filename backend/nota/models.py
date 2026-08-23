@@ -126,6 +126,47 @@ class PasswordResetToken(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
+class ConversionJob(Base):
+    """A background PDF-to-MusicXML (OMR) conversion, tracked outside the
+    request/response cycle.
+
+    The worker pool that actually runs a conversion (see `conversion.py`)
+    lives only in this process's memory -- it has no durable queue of its
+    own. This row is therefore the *only* durable record that a
+    conversion is in flight, what it started from, and how it ended; a
+    process restart mid-conversion leaves nothing else behind to recover
+    from, which is exactly what `conversion.reconcile_interrupted_jobs`
+    relies on at startup to fail any job stranded at `queued`/`running`
+    rather than leave it stuck forever.
+
+    `status` is one of "queued", "running", "succeeded", "failed".
+    `score_id` is populated only on success. `error_code`/`error_message`
+    are populated only on failure, reusing the same machine-readable
+    vocabulary the synchronous upload path already returns (e.g.
+    "OMR_NOT_CONFIGURED", "OMR_FAILED", "OMR_LOW_QUALITY") plus a couple
+    of codes unique to the background path ("TOO_MANY_CONVERSIONS" is
+    returned at submission time rather than stored here; "SERVER_RESTARTED"
+    and "INTERNAL_ERROR" are). `warnings_json` mirrors the OMR quality
+    warnings a synchronous upload would have returned inline.
+    """
+
+    __tablename__ = "conversion_jobs"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(String(32), ForeignKey("users.id"), nullable=False)
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="queued")
+    score_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    warnings_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_now, onupdate=_now
+    )
+
+
 class UsageCounter(Base):
     """Per-user, per-day, per-endpoint-kind counter backing the daily usage
     quotas on LLM-backed endpoints (voice/text commands, transcription).

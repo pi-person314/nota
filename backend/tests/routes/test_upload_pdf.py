@@ -1,9 +1,13 @@
-"""PDF upload tests: OMR conversion is mocked for the happy path and every
-error path (see tests/services/test_omr_service.py for the OMR service's
-own unit tests). The one real end-to-end conversion against a live
-Audiveris install lives in `test_real_audiveris_conversion_end_to_end`
-below, auto-skipped unless `AUDIVERIS_PATH` is set and points at a real
-launcher.
+"""PDF upload cases not covered by the background-job pipeline tests.
+
+PDF conversion runs as a background job, so the bulk of PDF coverage —
+queueing, job status/list endpoints, every OMR and ingest failure code,
+the quality gate, and cleanup — lives in `test_conversion_jobs.py`. What
+remains here is the handful of cases specific to the upload request
+itself: an awkward filename surviving the round trip, native MusicXML
+uploads staying free of OMR-only response fields, and the one real
+end-to-end conversion against a live Audiveris install (auto-skipped
+unless `AUDIVERIS_PATH` points at a real launcher).
 """
 
 from __future__ import annotations
@@ -13,13 +17,9 @@ import os
 from pathlib import Path
 
 import pytest
-from fixtures.musicxml_builders import (
-    omr_clean_score_bytes,
-    omr_mostly_empty_score_bytes,
-    omr_warning_level_score_bytes,
-    simple_score_bytes,
-)
+from fixtures.musicxml_builders import omr_clean_score_bytes, simple_score_bytes
 
+from nota import conversion
 from nota.services import omr
 
 
@@ -31,124 +31,50 @@ def _upload(client, filename, content):
     )
 
 
-def _install_fake_omr(monkeypatch, *, xml_bytes=None, suffix=".musicxml", exc=None):
-    """Monkeypatch `omr.convert_pdf_to_musicxml` so the route never shells
-    out to a real Audiveris process. On success, writes `xml_bytes` to a
-    real file under the caller-supplied `output_dir` and returns its path,
-    matching the real function's contract; `exc` makes it raise instead.
+@pytest.fixture
+def configured_omr(monkeypatch, tmp_path):
+    """Point AUDIVERIS_PATH at a real (if fake-content) file so the
+    upload route's "is OMR configured" fast-fail check passes and the
+    request reaches the queueing logic.
     """
+    launcher = tmp_path / "Audiveris.exe"
+    launcher.write_text("fake launcher")
+    monkeypatch.setenv("AUDIVERIS_PATH", str(launcher))
+    return launcher
 
+
+@pytest.fixture
+def sync_jobs(monkeypatch):
+    """Run every submitted job synchronously, in the request thread."""
+    monkeypatch.setattr(conversion, "submit_job", lambda job_id: conversion.run_job(job_id))
+
+
+def _install_fake_omr(monkeypatch, xml_bytes):
     def fake_convert(pdf_path, output_dir, *, timeout_s=omr.DEFAULT_TIMEOUT_S):
-        if exc is not None:
-            raise exc
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
-        produced = output_dir / f"converted{suffix}"
+        produced = output_dir / "converted.musicxml"
         produced.write_bytes(xml_bytes)
         return produced
 
     monkeypatch.setattr(omr, "convert_pdf_to_musicxml", fake_convert)
 
 
-def test_pdf_upload_happy_path_runs_omr_then_ingest(auth_client, monkeypatch):
-    _install_fake_omr(monkeypatch, xml_bytes=simple_score_bytes(title="Scanned Piece"))
+def test_pdf_upload_with_spaces_in_filename_converts_cleanly(
+    auth_client, configured_omr, sync_jobs, monkeypatch
+):
+    # Spaces and mixed case in the original name have to survive being
+    # staged to disk and handed to the converter.
+    _install_fake_omr(monkeypatch, omr_clean_score_bytes())
 
-    resp = _upload(auth_client, "scanned.pdf", b"%PDF-1.4 fake pdf bytes")
-
-    assert resp.status_code == 201
+    resp = _upload(auth_client, "My Great Score.pdf", b"%PDF-1.4 fake pdf bytes")
+    assert resp.status_code == 202
     body = resp.get_json()
-    assert body["name"] == "Scanned Piece"
-    assert body["measure_count"] == 1
+    assert body["filename"] == "My Great Score.pdf"
 
-
-def test_pdf_upload_not_configured_is_422(auth_client, monkeypatch):
-    _install_fake_omr(monkeypatch, exc=omr.OMRNotConfigured("AUDIVERIS_PATH is not set."))
-
-    resp = _upload(auth_client, "scanned.pdf", b"%PDF-1.4 fake pdf bytes")
-
-    assert resp.status_code == 422
-    assert resp.get_json()["error"] == "OMR_NOT_CONFIGURED"
-
-
-def test_pdf_upload_conversion_failure_is_422(auth_client, monkeypatch):
-    _install_fake_omr(monkeypatch, exc=omr.OMRConversionFailed("Audiveris exited with status 1."))
-
-    resp = _upload(auth_client, "scanned.pdf", b"%PDF-1.4 fake pdf bytes")
-
-    assert resp.status_code == 422
-    body = resp.get_json()
-    assert body["error"] == "OMR_FAILED"
-    assert "status 1" in body["message"]
-
-
-def test_pdf_upload_with_unparseable_omr_output_is_invalid_musicxml(auth_client, monkeypatch):
-    # OMR "succeeds" (produces a file) but the content isn't valid
-    # MusicXML -- the normal ingest pipeline's own rejection must still
-    # apply, unchanged, to whatever OMR hands it.
-    _install_fake_omr(monkeypatch, xml_bytes=b"not xml at all")
-
-    resp = _upload(auth_client, "scanned.pdf", b"%PDF-1.4 fake pdf bytes")
-
-    assert resp.status_code == 422
-    assert resp.get_json()["error"] == "INVALID_XML"
-
-
-def test_pdf_upload_respects_existing_size_cap(auth_client, app, monkeypatch):
-    # Should be rejected on size alone, before OMR ever runs -- fail the
-    # test loudly if that assumption breaks.
-    def fail_if_called(*args, **kwargs):
-        raise AssertionError("OMR should not run for an oversized upload")
-
-    monkeypatch.setattr(omr, "convert_pdf_to_musicxml", fail_if_called)
-
-    cfg = app.config["NOTA_CONFIG"]
-    oversized = b"%PDF-1.4" + b"a" * (cfg.max_upload_bytes + 1)
-
-    resp = _upload(auth_client, "big.pdf", oversized)
-
-    assert resp.status_code == 413
-    assert resp.get_json()["error"] == "FILE_TOO_LARGE"
-
-
-def test_pdf_upload_result_filename_uses_original_stem(auth_client, monkeypatch, app):
-    _install_fake_omr(monkeypatch, xml_bytes=simple_score_bytes())
-
-    resp = _upload(auth_client, "my great score.pdf", b"%PDF-1.4 fake pdf bytes")
-
-    assert resp.status_code == 201
-
-
-def test_pdf_upload_mostly_empty_omr_output_is_low_quality(auth_client, monkeypatch):
-    _install_fake_omr(monkeypatch, xml_bytes=omr_mostly_empty_score_bytes())
-
-    resp = _upload(auth_client, "scanned.pdf", b"%PDF-1.4 fake pdf bytes")
-
-    assert resp.status_code == 422
-    assert resp.get_json()["error"] == "OMR_LOW_QUALITY"
-
-    listing = auth_client.get("/api/scores")
-    assert listing.get_json() == []
-
-
-def test_pdf_upload_warning_level_omr_output_is_201_with_warnings(auth_client, monkeypatch):
-    _install_fake_omr(monkeypatch, xml_bytes=omr_warning_level_score_bytes())
-
-    resp = _upload(auth_client, "scanned.pdf", b"%PDF-1.4 fake pdf bytes")
-
-    assert resp.status_code == 201
-    body = resp.get_json()
-    assert body["omr_warnings"] != []
-
-
-def test_pdf_upload_clean_omr_output_is_201_with_no_warnings(auth_client, monkeypatch):
-    _install_fake_omr(monkeypatch, xml_bytes=omr_clean_score_bytes())
-
-    resp = _upload(auth_client, "scanned.pdf", b"%PDF-1.4 fake pdf bytes")
-
-    assert resp.status_code == 201
-    body = resp.get_json()
-    assert body["omr_warnings"] == []
-    assert body["from_pdf"] is True
+    status = auth_client.get(f"/api/scores/jobs/{body['job_id']}").get_json()
+    assert status["status"] == "succeeded", status
+    assert status["score_id"]
 
 
 def test_native_musicxml_upload_has_no_omr_warnings_key(auth_client):
@@ -166,20 +92,23 @@ def test_native_musicxml_upload_has_no_omr_warnings_key(auth_client):
     not (os.environ.get("AUDIVERIS_PATH") and Path(os.environ["AUDIVERIS_PATH"]).is_file()),
     reason="AUDIVERIS_PATH is not set to a real Audiveris launcher",
 )
-def test_real_audiveris_conversion_end_to_end(auth_client):
+def test_real_audiveris_conversion_end_to_end(auth_client, sync_jobs):
     """Runs a real Audiveris conversion against a small generated PDF of
     an engraved scale. Only runs when AUDIVERIS_PATH points at a real,
     installed launcher; skipped in ordinary CI/dev runs otherwise.
+
+    The job is run synchronously here so the conversion's outcome is
+    observable without polling a background thread.
     """
     fixture_pdf = Path(__file__).parent / "fixtures" / "omr_test_scale.pdf"
     raw_bytes = fixture_pdf.read_bytes()
 
     resp = _upload(auth_client, "test_scale.pdf", raw_bytes)
+    assert resp.status_code == 202, resp.get_json()
 
-    assert resp.status_code == 201, resp.get_json()
-    body = resp.get_json()
-    assert body["measure_count"] >= 1
+    status = auth_client.get(f"/api/scores/jobs/{resp.get_json()['job_id']}").get_json()
+    assert status["status"] == "succeeded", status
 
-    detail = auth_client.get(f"/api/scores/{body['id']}")
-    xml = detail.get_json()["musicxml"]
-    assert "<score-partwise" in xml
+    detail = auth_client.get(f"/api/scores/{status['score_id']}").get_json()
+    assert detail["measure_count"] >= 1
+    assert "<score-partwise" in detail["musicxml"]

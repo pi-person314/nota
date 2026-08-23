@@ -73,6 +73,23 @@ def ensure_initialized() -> None:
     _ensure_initialized()
 
 
+def score_storage_dir() -> str:
+    """Return the directory score files are stored in, initializing the
+    module first if nothing has configured it yet.
+
+    Exists for callers that need the path itself rather than a specific
+    score's file — e.g. staging an upload alongside the score files —
+    and that run somewhere Flask's application config isn't reachable,
+    such as a background worker thread.
+    """
+    _ensure_initialized()
+    if _storage_dir is None:
+        # Defensive: _ensure_initialized always sets this, falling back to
+        # the SCORE_STORAGE_DIR default when nothing configured it.
+        raise RuntimeError("Score storage directory is not configured.")
+    return _storage_dir
+
+
 def _now() -> datetime:
     return datetime.now(timezone.utc)
 

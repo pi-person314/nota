@@ -98,6 +98,44 @@ export interface UploadResponse extends ScoreSummary {
   omr_warnings?: string[]
 }
 
+// A PDF upload doesn't convert synchronously — the server queues a
+// background OMR job and hands back its id right away instead of a
+// finished score.
+export interface QueuedConversion {
+  job_id: string
+  status: 'queued'
+  filename: string
+}
+
+// The upload endpoint's response is one of two shapes depending on
+// whether the file needed background conversion: an immediate score
+// (native MusicXML/.mxl, or a PDF the server considers fast enough to
+// finish inline) or a queued job to poll. `isQueuedConversion` narrows
+// between them.
+export type UploadScoreResponse = UploadResponse | QueuedConversion
+
+export function isQueuedConversion(resp: UploadScoreResponse): resp is QueuedConversion {
+  return 'job_id' in resp
+}
+
+export type ConversionJobStatus = 'queued' | 'running' | 'succeeded' | 'failed'
+
+export interface ConversionJob {
+  id: string
+  status: ConversionJobStatus
+  filename: string
+  score_id: string | null
+  error_code: string | null
+  error_message: string | null
+  warnings: string[]
+  created_at: string
+  updated_at: string
+}
+
+export interface ConversionJobsResponse {
+  items: ConversionJob[]
+}
+
 export type SortKey = 'last_opened' | 'last_modified' | 'date_uploaded' | 'name_asc' | 'name_desc'
 
 export interface CommandResult {
@@ -178,7 +216,13 @@ export const api = {
   uploadScore(file: File) {
     const form = new FormData()
     form.append('file', file)
-    return request<UploadResponse>('/scores/upload', { method: 'POST', body: form })
+    return request<UploadScoreResponse>('/scores/upload', { method: 'POST', body: form })
+  },
+  getConversionJob(jobId: string) {
+    return request<ConversionJob>(`/scores/jobs/${jobId}`)
+  },
+  listConversionJobs() {
+    return request<ConversionJobsResponse>('/scores/jobs')
   },
   getScore(id: string) {
     return request<ScoreDetail>(`/scores/${id}`)

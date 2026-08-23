@@ -11,17 +11,16 @@ from __future__ import annotations
 import json
 import os
 import re
-import tempfile
 import uuid
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from flask import Blueprint, current_app, jsonify, request
 
+from .. import conversion
 from .. import db as db_module
 from .. import models
 from .. import storage
-from ..services import omr
-from ..services.omr_quality import assess_omr_output
 from . import musicxml_ingest as ingest
 from ._helpers import current_user_id, error_response, iso_utc, login_required
 
@@ -30,6 +29,18 @@ bp = Blueprint("scores", __name__, url_prefix="/api/scores")
 PDF_EXTENSION = ".pdf"
 
 MAX_THUMBNAIL_SVG_CHARS = 2_000_000
+
+# How many PDF conversions a single user may have queued or running at
+# once. Audiveris conversions are serialized onto one worker (see
+# conversion.py), so without a cap one user queuing many large PDFs could
+# make every other user's conversions wait behind all of them.
+MAX_UNFINISHED_JOBS = 3
+
+# How far back GET /api/scores/jobs looks. Long enough that a user who
+# steps away mid-conversion and comes back later still finds it, short
+# enough that the list doesn't accumulate months of old jobs.
+JOB_LIST_WINDOW = timedelta(hours=24)
+JOB_LIST_LIMIT = 20
 
 SORT_FIELDS = {
     "last_opened": (models.Score.last_opened_at, True),
@@ -81,26 +92,32 @@ def _safe_export_filename(name: str) -> str:
     return f"{stem}.musicxml"
 
 
-def _run_omr(filename: str, raw_bytes: bytes) -> tuple[str, bytes]:
-    """Convert an uploaded PDF's bytes to MusicXML via Audiveris.
+def _omr_configured() -> bool:
+    """Cheap check for whether PDF import is set up at all, so an upload
+    can fail fast at 422 instead of queueing a background job that's
+    doomed to fail once a worker eventually picks it up.
 
-    Writes the PDF to a temporary directory (Audiveris is a CLI tool that
-    reads/writes files, not bytes), runs the conversion, and reads the
-    result back into memory before the temporary directory is cleaned up.
-    Returns `(filename, xml_bytes)` with a filename derived from the
-    original upload's name and the exported file's extension, so the
-    normal ingest pipeline's extension check and display-name fallback
-    both behave the same as for a native MusicXML upload.
+    Mirrors `services/omr.py`'s own `AUDIVERIS_PATH` + path-existence
+    check (`_audiveris_launcher`) rather than importing it: that module
+    exposes no public "is configured" query, and adding one is outside
+    the scope of this change.
     """
-    stem = Path(filename).stem or "score"
-    with tempfile.TemporaryDirectory(prefix="nota-omr-") as tmp_dir:
-        tmp_dir_path = Path(tmp_dir)
-        pdf_path = tmp_dir_path / f"{stem}.pdf"
-        pdf_path.write_bytes(raw_bytes)
+    launcher = os.environ.get("AUDIVERIS_PATH")
+    return bool(launcher) and Path(launcher).is_file()
 
-        output_dir = tmp_dir_path / "out"
-        produced = omr.convert_pdf_to_musicxml(pdf_path, output_dir)
-        return f"{stem}{produced.suffix}", produced.read_bytes()
+
+def _job_summary(job: models.ConversionJob) -> dict:
+    return {
+        "id": job.id,
+        "status": job.status,
+        "filename": job.filename,
+        "score_id": job.score_id,
+        "error_code": job.error_code,
+        "error_message": job.error_message,
+        "warnings": json.loads(job.warnings_json or "[]"),
+        "created_at": iso_utc(job.created_at),
+        "updated_at": iso_utc(job.updated_at),
+    }
 
 
 @bp.post("/upload")
@@ -124,33 +141,45 @@ def upload():
     from_pdf = ingest.extension_of(filename) == PDF_EXTENSION
 
     if from_pdf:
-        try:
-            filename, raw_bytes = _run_omr(filename, raw_bytes)
-        except omr.OMRNotConfigured:
+        # PDFs go through Audiveris OMR, which can take minutes -- far
+        # longer than a request should stay open. This queues a
+        # background ConversionJob and returns immediately; the client
+        # polls GET /api/scores/jobs/<job_id> for the result instead of
+        # waiting on this response. Every other upload type is handled
+        # inline below, unchanged.
+        if not _omr_configured():
             return error_response(
                 422,
                 "OMR_NOT_CONFIGURED",
                 "PDF import is not configured on this server.",
             )
-        except omr.OMRConversionFailed as exc:
-            return error_response(422, "OMR_FAILED", str(exc))
+
+        user_id = current_user_id()
+        if conversion.unfinished_job_count(user_id) >= MAX_UNFINISHED_JOBS:
+            return error_response(
+                429,
+                "TOO_MANY_CONVERSIONS",
+                f"You already have {MAX_UNFINISHED_JOBS} PDF conversions in "
+                "progress. Wait for one to finish before starting another.",
+            )
+
+        job_id = uuid.uuid4().hex
+        with db_module.session_scope() as db_session:
+            db_session.add(
+                models.ConversionJob(
+                    id=job_id, user_id=user_id, filename=filename, status="queued"
+                )
+            )
+
+        conversion.stage_pdf(job_id, raw_bytes)
+        conversion.submit_job(job_id)
+
+        return jsonify({"job_id": job_id, "status": "queued", "filename": filename}), 202
 
     try:
         metadata = ingest.ingest_upload(filename, raw_bytes)
     except ingest.UploadRejected as exc:
         return error_response(exc.status, exc.code, exc.message)
-
-    omr_warnings: list[str] | None = None
-    if from_pdf:
-        quality = assess_omr_output(metadata.canonical_xml)
-        if not quality.acceptable:
-            return error_response(
-                422,
-                "OMR_LOW_QUALITY",
-                "Audiveris couldn't extract usable notation from this PDF. "
-                "A cleaner, higher-resolution scan of printed sheet music works best.",
-            )
-        omr_warnings = quality.warnings
 
     score_id = uuid.uuid4().hex
     file_path = os.path.join(cfg.score_storage_dir, f"{score_id}.musicxml")
@@ -166,7 +195,7 @@ def upload():
             has_pickup=metadata.has_pickup,
             parts_json=json.dumps(metadata.parts),
             time_signatures_json=json.dumps(metadata.time_signatures),
-            from_pdf=from_pdf,
+            from_pdf=False,
         )
         db_session.add(score)
         db_session.flush()
@@ -174,10 +203,39 @@ def upload():
 
     storage.write_xml(score_id, metadata.canonical_xml)
 
-    if omr_warnings is not None:
-        summary["omr_warnings"] = omr_warnings
-
     return jsonify(summary), 201
+
+
+@bp.get("/jobs/<job_id>")
+@login_required
+def get_job(job_id):
+    with db_module.session_scope() as db_session:
+        job = db_session.get(models.ConversionJob, job_id)
+        if job is None:
+            return error_response(404, "JOB_NOT_FOUND", "No conversion job with that id.")
+        if job.user_id != current_user_id():
+            return error_response(403, "FORBIDDEN", "You do not have access to this job.")
+        summary = _job_summary(job)
+
+    return jsonify(summary), 200
+
+
+@bp.get("/jobs")
+@login_required
+def list_jobs():
+    cutoff = datetime.now(timezone.utc) - JOB_LIST_WINDOW
+    with db_module.session_scope() as db_session:
+        jobs = (
+            db_session.query(models.ConversionJob)
+            .filter_by(user_id=current_user_id())
+            .filter(models.ConversionJob.created_at >= cutoff)
+            .order_by(models.ConversionJob.created_at.desc())
+            .limit(JOB_LIST_LIMIT)
+            .all()
+        )
+        items = [_job_summary(job) for job in jobs]
+
+    return jsonify({"items": items}), 200
 
 
 @bp.get("")
