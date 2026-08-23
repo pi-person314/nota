@@ -102,6 +102,15 @@ ORNAMENT_ID_SURVIVES_EXPORT: dict[str, bool] = {
     "fermata": True,
 }
 
+# Finger numbers a musician might dictate for a fingering mark, 0-5. 0
+# means an open string (there is no equivalent "open" concept for a
+# fretted/keyboard finger number, but string players dictate it routinely,
+# so it is accepted uniformly rather than gated on instrument). music21's
+# Fingering class accepts any int, but input is restricted to this set for
+# the same reason ALLOWED_DYNAMICS restricts dynamic names: a
+# mis-transcribed number should surface as a clean, actionable error.
+FINGER_VALUES = frozenset(range(6))
+
 # Tempo unit -> referent quarter-length, passed to
 # music21.tempo.MetronomeMark(referent=...). music21 accepts a numeric
 # quarter length for `referent` but not free-form strings like "dotted
@@ -132,6 +141,7 @@ NOTATION_TYPE_LABELS: dict[str, str] = {
     "text_expression": "text expression",
     "tempo": "tempo marking",
     "rehearsal_mark": "rehearsal mark",
+    "fingering": "fingering",
 }
 
 
@@ -573,6 +583,78 @@ def add_ornament(
     return run_tool(score_id, label, planner)
 
 
+def add_fingering(
+    score_id: str,
+    measure: int,
+    beat: float,
+    finger: int,
+    part: str | None = None,
+) -> dict:
+    """Attach a fingering number (0-5; 0 = open string) to the note at a
+    beat position. Must target a real note (chords count as one note).
+
+    A note can carry only one fingering: music21's MusicXML writer keeps
+    just the first Fingering articulation on a (non-chord) note and
+    silently drops any later one ("Superfluous fingerings will be
+    ignored", per its own docstring on chordToXml) -- so simply appending
+    a second one would report success while actually leaving the old
+    number on disk. To give a musician changing their mind ("no, second
+    finger") the behavior they expect, any existing fingering on the
+    target is replaced rather than stacked.
+
+    If the same finger number is already on that note, this is a no-op
+    that still reports success (voice commands get repeated when a
+    musician isn't sure they were heard).
+    """
+    label = f"add_fingering {finger} m{measure} b{_format_beat(beat)}"
+
+    def planner(score: m21.stream.Score) -> ToolPlan:
+        part_obj = location.resolve_part(score, part)
+
+        if finger not in FINGER_VALUES:
+            raise ToolError(
+                ErrorCode.INVALID_ENUM_VALUE,
+                f"Unknown finger '{finger}'. Valid values: "
+                f"{', '.join(str(v) for v in sorted(FINGER_VALUES))}.",
+            )
+
+        measure_obj = location.resolve_measure(part_obj, measure)
+        target_note = location.find_note_at(measure_obj, beat)
+
+        already_present = any(
+            isinstance(existing, m21.articulations.Fingering) and existing.fingerNumber == finger
+            for existing in target_note.articulations
+        )
+        if already_present:
+            return ToolPlan(
+                no_op_summary=(
+                    f"Fingering {finger} already present at measure {measure} "
+                    f"beat {_format_beat(beat)}"
+                )
+            )
+
+        def apply() -> tuple[list[str], str]:
+            target_note.articulations = [
+                a for a in target_note.articulations if not isinstance(a, m21.articulations.Fingering)
+            ]
+            fingering_obj = m21.articulations.Fingering(finger)
+            target_note.articulations.append(fingering_obj)
+
+            # Empirically, music21's MusicXML writer drops a Fingering
+            # object's own id (it never reaches the <fingering> element it
+            # emits inside <notations><technical>), so — same fallback as
+            # ORNAMENT_ID_SURVIVES_EXPORT's False entries — the id reported
+            # is the parent note's.
+            note_id = ids.assign_id(target_note)
+
+            summary = f"Added fingering {finger} at measure {measure}, beat {_format_beat(beat)}"
+            return [note_id], summary
+
+        return ToolPlan(apply=apply)
+
+    return run_tool(score_id, label, planner)
+
+
 # ---------------------------------------------------------------------------
 # remove_notation: candidate discovery across every notation family the
 # tools above create, disambiguation, and removal.
@@ -674,10 +756,32 @@ def _find_removal_candidates(
             if not _offset_matches(note_obj.getOffsetInHierarchy(measure_obj), target_offset):
                 continue
             for art in list(note_obj.articulations):
+                # music21 models Fingering as an Articulation subclass, but
+                # it is surfaced here as its own "fingering" family (see
+                # below), so it must be excluded here or "remove the
+                # articulation" would ambiguously (or silently) grab a
+                # fingering mark too.
+                if isinstance(art, m21.articulations.Fingering):
+                    continue
                 candidates.append(
                     {
                         "family": "articulation",
                         "description": _describe_articulation(art),
+                        "remove": (lambda n=note_obj, a=art: n.articulations.remove(a)),
+                    }
+                )
+
+    if "fingering" in families:
+        for note_obj in measure_obj.recurse().notes:
+            if not _offset_matches(note_obj.getOffsetInHierarchy(measure_obj), target_offset):
+                continue
+            for art in list(note_obj.articulations):
+                if not isinstance(art, m21.articulations.Fingering):
+                    continue
+                candidates.append(
+                    {
+                        "family": "fingering",
+                        "description": f"fingering {art.fingerNumber}",
                         "remove": (lambda n=note_obj, a=art: n.articulations.remove(a)),
                     }
                 )

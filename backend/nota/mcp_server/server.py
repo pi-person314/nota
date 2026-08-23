@@ -278,6 +278,27 @@ def add_ornament(
 
 @mcp.tool(
     description=(
+        "Attach a fingering number to the note at a measure/beat. 0 means an "
+        "open string. If the same finger number is already on that note, this "
+        "is a no-op that still reports success — safe to call again if unsure "
+        "a command landed."
+    )
+)
+def add_fingering(
+    score_id: ScoreId,
+    measure: MeasureArg,
+    beat: BeatArg,
+    finger: Annotated[
+        int,
+        Field(description="Finger number, 0-5 (0 = open string)."),
+    ],
+    part: PartArg = None,
+) -> dict:
+    return tools.add_fingering(score_id, measure=measure, beat=beat, finger=finger, part=part)
+
+
+@mcp.tool(
+    description=(
         "Remove a notation marking at a measure, optionally narrowed to a beat "
         "and/or a notation_type. If more than one marking matches, this returns "
         "AMBIGUOUS_TARGET listing each candidate so you can ask the user which one "
@@ -298,7 +319,7 @@ def remove_notation(
             default=None,
             description=(
                 "Narrow the search to one family: dynamic, hairpin, slur, articulation, "
-                "ornament, text_expression, tempo, rehearsal_mark."
+                "ornament, text_expression, tempo, rehearsal_mark, fingering."
             ),
         ),
     ] = None,

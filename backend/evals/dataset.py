@@ -124,6 +124,12 @@ CASES: list[dict] = [
         expect_tools(tc("add_ornament", measure=5, beat=2, ornament="trill")),
     ),
     case(
+        "simple_add_fingering",
+        "simple",
+        "third finger on beat 2 of measure 5",
+        expect_tools(tc("add_fingering", measure=5, beat=2, finger=3)),
+    ),
+    case(
         "simple_remove_notation",
         "simple",
         "remove the dynamic at measure 12 beat 1",

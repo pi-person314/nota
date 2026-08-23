@@ -26,7 +26,9 @@ LEXICON_PROMPT = (
     "rehearsal mark, ritardando, accelerando, a tempo, hairpin, dolce, "
     "sharp, flat, natural, octave, transpose, semitone, whole step, "
     "whole note, half note, quarter note, eighth note, sixteenth note, "
-    "dotted quarter, dotted half, rest, tie, C sharp, B flat."
+    "dotted quarter, dotted half, rest, tie, C sharp, B flat, "
+    "fingering, first finger, second finger, third finger, fourth finger, "
+    "open string."
 )
 
 _client_lock = threading.Lock()

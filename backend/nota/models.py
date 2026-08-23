@@ -101,3 +101,25 @@ class CommandLog(Base):
     tools_called_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     confirmation: Mapped[str] = mapped_column(Text, nullable=False, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class PasswordResetToken(Base):
+    """A single outstanding password-reset request.
+
+    Only a sha256 hash of the raw token is stored, mirroring how passwords
+    themselves are never stored in recoverable form — a database leak alone
+    can't be used to reset anyone's password. `used_at` is stamped instead
+    of deleting the row, so a replayed link can be told apart from one that
+    never existed. Multiple outstanding tokens per user are allowed;
+    requesting a new one does not invalidate older ones, which instead die
+    on their own `expires_at`.
+    """
+
+    __tablename__ = "password_reset_tokens"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(String(32), ForeignKey("users.id"), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)

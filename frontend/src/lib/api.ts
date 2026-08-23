@@ -154,6 +154,18 @@ export const api = {
   me() {
     return request<User>('/auth/me')
   },
+  forgotPassword(email: string) {
+    return request<{ ok: boolean }>('/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    })
+  },
+  resetPassword(token: string, password: string) {
+    return request<{ ok: boolean }>('/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ token, password }),
+    })
+  },
 
   listScores(params?: { sort?: SortKey; starred?: boolean; archived?: 'true' | 'false' | 'all' }) {
     const qs = new URLSearchParams()
