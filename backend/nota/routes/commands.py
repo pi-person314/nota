@@ -15,6 +15,7 @@ from flask import Blueprint, jsonify, request
 
 from .. import db as db_module
 from .. import models
+from .. import quota
 from .. import storage
 from ..orchestrator import loop, locks
 from ._helpers import current_user_id, error_response, iso_utc, login_required
@@ -53,6 +54,14 @@ def command(score_id):
     text = (data.get("text") or "").strip()
     if len(text) < 2:
         return error_response(422, "EMPTY_TRANSCRIPT", "Transcript is empty or too short.")
+
+    decision = quota.check_and_increment(current_user_id(), "command")
+    if not decision.allowed:
+        return error_response(
+            429,
+            "QUOTA_EXCEEDED",
+            f"Daily command limit reached ({decision.limit} per day). Resets at midnight UTC.",
+        )
 
     try:
         with locks.score_lock(score_id, timeout=COMMAND_LOCK_TIMEOUT):

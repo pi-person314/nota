@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import importlib
 
-from flask import Flask
+from flask import Flask, abort, send_from_directory
 from flask_cors import CORS
+from werkzeug.exceptions import NotFound
 
 from . import db as db_module
 from . import storage
@@ -26,14 +27,34 @@ def create_app(env: dict | None = None) -> Flask:
     app.config["SECRET_KEY"] = cfg.secret_key
     app.config["NOTA_CONFIG"] = cfg
 
-    # The frontend authenticates via session cookies, so credentialed
-    # requests (cookies) must be allowed across the dev origin boundary.
-    CORS(app, supports_credentials=True)
+    # SESSION_COOKIE_SAMESITE="Lax" is correct (rather than "Strict") because
+    # the Google OAuth callback returns the browser to us via a top-level GET
+    # navigation initiated by Google's site, not by ours; "Lax" still sends
+    # the session cookie on that navigation while "Strict" would drop it and
+    # break login. SESSION_COOKIE_SECURE additionally requires HTTPS, which
+    # only holds once we're actually deployed behind TLS.
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+    if cfg.is_production:
+        app.config["SESSION_COOKIE_SECURE"] = True
+
+    # In production the built SPA is served by this same app (same origin),
+    # so cross-origin credentialed requests are not a legitimate use case —
+    # CORS here is purely a convenience for `vite dev` running on its own
+    # port. Registering it in production would needlessly widen the attack
+    # surface for a mechanism nothing actually needs.
+    if not cfg.is_production:
+        # The frontend authenticates via session cookies, so credentialed
+        # requests (cookies) must be allowed across the dev origin boundary.
+        CORS(app, supports_credentials=True)
 
     db_module.init_db(cfg.database_url)
     storage.configure(database_url=cfg.database_url, score_storage_dir=cfg.score_storage_dir)
 
     _register_blueprints(app)
+
+    if cfg.frontend_dist_dir:
+        _register_spa(app, cfg.frontend_dist_dir)
 
     return app
 
@@ -55,3 +76,42 @@ def _register_blueprints(app: Flask) -> None:
     register = getattr(routes_pkg, "register_blueprints", None)
     if callable(register):
         register(app)
+
+
+def _register_spa(app: Flask, dist_dir: str) -> None:
+    """Serve the built frontend SPA from `dist_dir` for single-instance
+    deployment, where this Flask process is the only thing in front of the
+    browser (no separate static host or CDN).
+
+    A GET request for an existing file under `dist_dir` gets that file.
+    Hashed build assets under `assets/` (Vite content-hashes their
+    filenames) are safe to cache forever; `index.html` is marked no-cache
+    so a new deploy takes effect on the next load instead of being pinned
+    by a stale cached shell. Any other GET path that isn't under `/api`
+    falls back to `index.html` so client-side routes (e.g. `/dashboard`)
+    resolve correctly on a cold load/refresh. `/api/...` paths are never
+    served the SPA fallback; an unmatched one stays a normal 404.
+    """
+
+    @app.route("/", defaults={"path": ""})
+    @app.route("/<path:path>")
+    def serve_spa(path: str):
+        if path == "api" or path.startswith("api/"):
+            abort(404)
+
+        if path:
+            try:
+                # send_from_directory safely resolves `path` against
+                # dist_dir (rejecting traversal) and raises NotFound if it
+                # doesn't land on an existing regular file.
+                response = send_from_directory(dist_dir, path)
+            except NotFound:
+                response = None
+            if response is not None:
+                if path.startswith("assets/"):
+                    response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+                return response
+
+        response = send_from_directory(dist_dir, "index.html")
+        response.headers["Cache-Control"] = "no-cache"
+        return response

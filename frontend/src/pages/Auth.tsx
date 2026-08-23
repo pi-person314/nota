@@ -119,7 +119,7 @@ function PrimaryButton({ children, disabled }: { children: ReactNode; disabled?:
 }
 
 const RESET_CONFIRMATION_MESSAGE =
-  'If that email has an account, a reset link is on its way. On a dev server, check the backend console.'
+  'If that email has an account, a reset link is on its way — check your inbox.'
 
 export function Login() {
   const navigate = useNavigate()

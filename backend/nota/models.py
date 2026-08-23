@@ -13,6 +13,7 @@ from sqlalchemy import (
     LargeBinary,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -123,3 +124,28 @@ class PasswordResetToken(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class UsageCounter(Base):
+    """Per-user, per-day, per-endpoint-kind counter backing the daily usage
+    quotas on LLM-backed endpoints (voice/text commands, transcription).
+
+    `day` is stored as a UTC "YYYY-MM-DD" string rather than a `DateTime`
+    column, so the daily reset boundary always falls at midnight UTC no
+    matter what timezone the server process happens to be running in, and
+    so the natural per-day key is a plain string rather than a date-range
+    query. `kind` distinguishes independent quotas (e.g. "command" vs.
+    "transcribe") sharing the same table; the three columns together are
+    unique so there is exactly one counter row per user, per day, per kind.
+    """
+
+    __tablename__ = "usage_counters"
+    __table_args__ = (
+        UniqueConstraint("user_id", "day", "kind", name="uq_usage_counters_user_day_kind"),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(String(32), ForeignKey("users.id"), nullable=False)
+    day: Mapped[str] = mapped_column(String(10), nullable=False)
+    kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

@@ -9,7 +9,7 @@ import { WakeWordEngine } from '../lib/wakeWordEngine'
 // static assets — no account or access key required.
 const MELSPECTROGRAM_PATH = '/oww/melspectrogram.onnx'
 const EMBEDDING_PATH = '/oww/embedding_model.onnx'
-const DEFAULT_KEYWORD_PATH = '/oww/hey-nota.onnx'
+const DEFAULT_KEYWORD_PATH = '/oww/hey_nota.onnx'
 const DEFAULT_THRESHOLD = 0.5
 
 function resolveKeywordPath(): string {

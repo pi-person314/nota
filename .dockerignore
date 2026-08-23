@@ -1,0 +1,29 @@
+.git
+.claude
+
+# frontend
+frontend/node_modules
+frontend/dist
+frontend/.vite
+
+# backend
+backend/venv
+backend/data
+backend/*.db
+backend/tmp_scores_check
+backend/evals/results
+backend/tests
+backend/nota.db
+
+# secrets and local env
+.env
+.env.*
+*.pem
+*.key
+
+# misc
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache
+.DS_Store

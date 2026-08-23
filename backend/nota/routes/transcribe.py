@@ -9,8 +9,9 @@ import os
 
 from flask import Blueprint, jsonify, request
 
+from .. import quota
 from ..services import whisper
-from ._helpers import error_response, login_required
+from ._helpers import current_user_id, error_response, login_required
 
 bp = Blueprint("transcribe", __name__, url_prefix="/api")
 
@@ -34,6 +35,14 @@ def transcribe():
             413,
             "AUDIO_TOO_LARGE",
             f"Audio exceeds the {MAX_AUDIO_BYTES // (1024 * 1024)} MB limit.",
+        )
+
+    decision = quota.check_and_increment(current_user_id(), "transcribe")
+    if not decision.allowed:
+        return error_response(
+            429,
+            "QUOTA_EXCEEDED",
+            f"Daily transcription limit reached ({decision.limit} per day). Resets at midnight UTC.",
         )
 
     try:
