@@ -106,6 +106,7 @@ export class WakeWordEngine {
   private lastDetectionAt = 0
   private readonly debug = debugEnabled()
   private peakScore = 0
+  private peakLevel = 0
   private lastDebugReportAt = 0
 
   private constructor(
@@ -143,6 +144,21 @@ export class WakeWordEngine {
       : undefined
     this.keywordWindow = fixedDim(keywordInputShape, 1, DEFAULT_KEYWORD_WINDOW)
     this.embeddingSize = fixedDim(keywordInputShape, 2, DEFAULT_EMBEDDING_SIZE)
+
+    if (this.debug) {
+      // A wake-word model trained for a different window length than the
+      // one being fed to it still loads and still returns a score — just a
+      // meaningless one. Reporting the shape the model declares, next to
+      // the shape actually sent, makes that mismatch visible instead of
+      // looking like a model that simply never matches the phrase.
+      console.info(
+        '[nota wake word] keyword model declares',
+        JSON.stringify(keywordInputShape),
+        '- feeding [1,',
+        this.keywordWindow + ',',
+        this.embeddingSize + ']',
+      )
+    }
   }
 
   static async create(config: WakeWordEngineConfig, onDetect: () => void): Promise<WakeWordEngine> {
@@ -185,6 +201,19 @@ export class WakeWordEngine {
   }
 
   private async processChunk(chunk: number[]): Promise<void> {
+    if (this.debug) {
+      // Peak amplitude of the raw PCM reaching the engine, on the same
+      // 16-bit scale the voice processor emits (max 32767). A wake-word
+      // score that never moves has two very different causes — a model
+      // that never matches, or an input that never changes — and only
+      // this separates them: silence here means the microphone, not the
+      // model, is the thing to investigate.
+      for (const sample of chunk) {
+        const level = Math.abs(sample)
+        if (level > this.peakLevel) this.peakLevel = level
+      }
+    }
+
     // openWakeWord's melspectrogram model is trained on raw int16-range
     // samples, not samples normalized to [-1, 1] — only the dtype changes
     // to float32, not the scale.
@@ -248,9 +277,11 @@ export class WakeWordEngine {
       if (now - this.lastDebugReportAt >= DEBUG_REPORT_MS) {
         this.lastDebugReportAt = now
         console.info(
-          `[nota wake word] peak score ${this.peakScore.toFixed(3)} (fires at ${this.threshold})`,
+          `[nota wake word] peak score ${this.peakScore.toFixed(3)} ` +
+            `(fires at ${this.threshold}) | mic peak ${this.peakLevel}/32767`,
         )
         this.peakScore = 0
+        this.peakLevel = 0
       }
     }
 
