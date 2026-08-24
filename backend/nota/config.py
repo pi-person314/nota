@@ -8,7 +8,9 @@ environment state more than necessary.
 
 from __future__ import annotations
 
+import ntpath
 import os
+import posixpath
 from dataclasses import dataclass
 
 
@@ -26,6 +28,19 @@ MAX_AUDIO_BYTES = 25 * 1024 * 1024
 # route (with its specific, actionable error) rather than by the blanket
 # body-size ceiling. Covers multipart framing around the file itself.
 _REQUEST_OVERHEAD_BYTES = 1024 * 1024
+
+
+def _is_absolute_path(path: str) -> bool:
+    """Whether `path` is absolute under either POSIX or Windows rules.
+
+    The paths being checked describe where a deployment stores its data,
+    which is normally a Linux container path even when this code runs on
+    a Windows machine. `os.path.isabs` applies the rules of whichever
+    platform happens to be running, and on Windows it rejects "/data" —
+    so both conventions are accepted explicitly rather than deferring to
+    the host.
+    """
+    return posixpath.isabs(path) or ntpath.isabs(path)
 
 
 def _sqlite_path(database_url: str) -> str | None:
@@ -134,7 +149,7 @@ def _require_absolute_data_paths(database_url: str, score_storage_dir: str) -> N
     that silent, unrecoverable outcome into an obvious one.
     """
     sqlite_path = _sqlite_path(database_url)
-    if sqlite_path is not None and not os.path.isabs(sqlite_path):
+    if sqlite_path is not None and not _is_absolute_path(sqlite_path):
         raise ConfigError(
             f"DATABASE_URL points at a relative path ({database_url!r}), which in "
             "production would put the database inside the container instead of on "
@@ -142,7 +157,7 @@ def _require_absolute_data_paths(database_url: str, score_storage_dir: str) -> N
             "absolute path, e.g. sqlite:////data/nota.db (note the four slashes)."
         )
 
-    if not os.path.isabs(score_storage_dir):
+    if not _is_absolute_path(score_storage_dir):
         raise ConfigError(
             f"SCORE_STORAGE_DIR points at a relative path ({score_storage_dir!r}), "
             "which in production would store uploaded scores inside the container "

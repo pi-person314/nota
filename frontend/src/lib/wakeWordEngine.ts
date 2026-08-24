@@ -34,6 +34,23 @@ const DEFAULT_EMBEDDING_SIZE = 96
 const DEFAULT_KEYWORD_WINDOW = 16 // embeddings consumed per keyword score
 const REFRACTORY_MS = 2000 // minimum gap between two detections
 
+// How often, at most, the peak score is reported while diagnostics are on.
+const DEBUG_REPORT_MS = 1000
+
+// Diagnostics are opt-in per browser rather than build-time, so a
+// deployed instance can be investigated without rebuilding it: run
+// localStorage.setItem('nota-wakeword-debug', '1') in the console and
+// reload. Without the peak score there is no way to tell a wake-word
+// model that scores just under the threshold (tune it) from one that
+// never responds to the phrase at all (retrain it).
+function debugEnabled(): boolean {
+  try {
+    return localStorage.getItem('nota-wakeword-debug') === '1'
+  } catch {
+    return false
+  }
+}
+
 export interface WakeWordEngineConfig {
   melspectrogramModelPath: string
   embeddingModelPath: string
@@ -87,6 +104,9 @@ export class WakeWordEngine {
   // keyword pass.
   private embeddings: Float32Array[] = []
   private lastDetectionAt = 0
+  private readonly debug = debugEnabled()
+  private peakScore = 0
+  private lastDebugReportAt = 0
 
   private constructor(
     melSession: ort.InferenceSession,
@@ -222,6 +242,18 @@ export class WakeWordEngine {
     this.embeddings.shift()
 
     const now = Date.now()
+
+    if (this.debug) {
+      this.peakScore = Math.max(this.peakScore, score)
+      if (now - this.lastDebugReportAt >= DEBUG_REPORT_MS) {
+        this.lastDebugReportAt = now
+        console.info(
+          `[nota wake word] peak score ${this.peakScore.toFixed(3)} (fires at ${this.threshold})`,
+        )
+        this.peakScore = 0
+      }
+    }
+
     if (score >= this.threshold && now - this.lastDetectionAt >= REFRACTORY_MS) {
       this.lastDetectionAt = now
       this.onDetect()

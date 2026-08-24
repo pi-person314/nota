@@ -92,7 +92,15 @@ export function Dashboard() {
           </div>
         ) : (
           <>
-            <div className="mt-7 grid grid-cols-[1.6fr_1fr] gap-5 max-lg:grid-cols-1">
+            {/* With nothing to continue — every score archived, or none
+                opened yet — the dropzone is the only card here, so it takes
+                the whole row instead of sitting in a two-column track with
+                an empty second column beside it. */}
+            <div
+              className={`mt-7 grid gap-5 max-lg:grid-cols-1 ${
+                lastOpened ? 'grid-cols-[1.6fr_1fr]' : 'grid-cols-1'
+              }`}
+            >
               {lastOpened && <ContinueCard score={lastOpened} />}
               <UploadDropzone />
             </div>

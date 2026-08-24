@@ -136,3 +136,17 @@ def test_production_does_not_send_cors_headers(tmp_path):
     client = app.test_client()
     resp = client.get("/api/auth/me", headers={"Origin": "http://localhost:5173"})
     assert "Access-Control-Allow-Origin" not in resp.headers
+
+
+def test_posix_container_paths_accepted_regardless_of_host_platform(tmp_path):
+    """A deployment's data paths describe a Linux container, even when the
+    tests run on Windows. `os.path.isabs` follows the host's rules and
+    rejects "/data" on Windows, so the check must not defer to it.
+    """
+    env = _env(tmp_path, APP_ENV="production")
+    env["DATABASE_URL"] = "sqlite:////data/nota.db"
+    env["SCORE_STORAGE_DIR"] = "/data/scores"
+
+    cfg = load_config(env)
+    assert cfg.database_url == "sqlite:////data/nota.db"
+    assert cfg.score_storage_dir == "/data/scores"
