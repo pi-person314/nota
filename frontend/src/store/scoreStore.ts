@@ -94,7 +94,6 @@ interface ScoreState {
   search: string
   sortMode: SortMode
   tab: ShelfTab
-  wakeEnabled: boolean
   loading: boolean
   loadError: string | null
   // Background PDF (OMR) conversion jobs this session knows about — both
@@ -126,7 +125,6 @@ interface ScoreState {
   setSearch: (q: string) => void
   cycleSort: () => void
   setTab: (tab: ShelfTab) => void
-  toggleWake: () => void
   reset: () => void
 }
 
@@ -310,7 +308,6 @@ export const useScoreStore = create<ScoreState>((set, get) => ({
   search: '',
   sortMode: 'Last opened',
   tab: 'library',
-  wakeEnabled: true,
   loading: false,
   loadError: null,
   conversions: [],
@@ -525,7 +522,6 @@ export const useScoreStore = create<ScoreState>((set, get) => ({
       sortMode: SORT_MODES[(SORT_MODES.indexOf(s.sortMode) + 1) % SORT_MODES.length],
     })),
   setTab: (tab) => set({ tab }),
-  toggleWake: () => set((s) => ({ wakeEnabled: !s.wakeEnabled })),
   reset: () => {
     stopAllPolling()
     set({ scores: [], search: '', tab: 'library', loadError: null, conversions: [] })

@@ -34,23 +34,6 @@ const DEFAULT_EMBEDDING_SIZE = 96
 const DEFAULT_KEYWORD_WINDOW = 16 // embeddings consumed per keyword score
 const REFRACTORY_MS = 2000 // minimum gap between two detections
 
-// How often, at most, the peak score is reported while diagnostics are on.
-const DEBUG_REPORT_MS = 1000
-
-// Diagnostics are opt-in per browser rather than build-time, so a
-// deployed instance can be investigated without rebuilding it: run
-// localStorage.setItem('nota-wakeword-debug', '1') in the console and
-// reload. Without the peak score there is no way to tell a wake-word
-// model that scores just under the threshold (tune it) from one that
-// never responds to the phrase at all (retrain it).
-function debugEnabled(): boolean {
-  try {
-    return localStorage.getItem('nota-wakeword-debug') === '1'
-  } catch {
-    return false
-  }
-}
-
 export interface WakeWordEngineConfig {
   melspectrogramModelPath: string
   embeddingModelPath: string
@@ -108,13 +91,6 @@ export class WakeWordEngine {
   private drainTail: Promise<void> = Promise.resolve()
   // Bumped by reset() so an in-flight drain can notice it is now stale.
   private generation = 0
-  private readonly debug = debugEnabled()
-  private peakScore = 0
-  private peakLevel = 0
-  private melPeak = 0
-  private lastMelPeak = 0
-  private embeddingSpread = 0
-  private lastDebugReportAt = 0
 
   private constructor(
     melSession: ort.InferenceSession,
@@ -152,20 +128,6 @@ export class WakeWordEngine {
     this.keywordWindow = fixedDim(keywordInputShape, 1, DEFAULT_KEYWORD_WINDOW)
     this.embeddingSize = fixedDim(keywordInputShape, 2, DEFAULT_EMBEDDING_SIZE)
 
-    if (this.debug) {
-      // A wake-word model trained for a different window length than the
-      // one being fed to it still loads and still returns a score — just a
-      // meaningless one. Reporting the shape the model declares, next to
-      // the shape actually sent, makes that mismatch visible instead of
-      // looking like a model that simply never matches the phrase.
-      console.info(
-        '[nota wake word] keyword model declares',
-        JSON.stringify(keywordInputShape),
-        '- feeding [1,',
-        this.keywordWindow + ',',
-        this.embeddingSize + ']',
-      )
-    }
   }
 
   static async create(config: WakeWordEngineConfig, onDetect: () => void): Promise<WakeWordEngine> {
@@ -234,19 +196,6 @@ export class WakeWordEngine {
   }
 
   private async processChunk(chunk: number[]): Promise<void> {
-    if (this.debug) {
-      // Peak amplitude of the raw PCM reaching the engine, on the same
-      // 16-bit scale the voice processor emits (max 32767). A wake-word
-      // score that never moves has two very different causes — a model
-      // that never matches, or an input that never changes — and only
-      // this separates them: silence here means the microphone, not the
-      // model, is the thing to investigate.
-      for (const sample of chunk) {
-        const level = Math.abs(sample)
-        if (level > this.peakLevel) this.peakLevel = level
-      }
-    }
-
     // openWakeWord's melspectrogram model is trained on raw int16-range
     // samples, not samples normalized to [-1, 1] — only the dtype changes
     // to float32, not the scale.
@@ -266,11 +215,6 @@ export class WakeWordEngine {
         frame[b] = data[f * bins + b] / 10 + 2
       }
       this.melFrames.push(frame)
-      if (this.debug) {
-        for (const v of frame) {
-          if (v > this.lastMelPeak) this.lastMelPeak = v
-        }
-      }
     }
 
     while (this.melFrames.length >= this.embeddingWindow) {
@@ -287,22 +231,6 @@ export class WakeWordEngine {
     const result = await this.embeddingSession.run({ [this.embeddingInputName]: input })
     const embedding = Float32Array.from(result[this.embeddingOutputName].data as Float32Array)
     this.embeddings.push(embedding)
-
-    if (this.debug) {
-      // Spread of the embedding vector, tracked so a dead score can be
-      // traced to the stage that produced it. Loud audio that yields a
-      // flat embedding means the melspectrogram or embedding stage is at
-      // fault; a varying embedding that still scores zero points at the
-      // wake-word model itself.
-      let min = Infinity
-      let max = -Infinity
-      for (const v of embedding) {
-        if (v < min) min = v
-        if (v > max) max = v
-      }
-      this.embeddingSpread = Math.max(this.embeddingSpread, max - min)
-      this.melPeak = Math.max(this.melPeak, this.lastMelPeak)
-    }
 
     this.melFrames.splice(0, EMBEDDING_STRIDE)
 
@@ -325,24 +253,6 @@ export class WakeWordEngine {
     this.embeddings.shift()
 
     const now = Date.now()
-
-    if (this.debug) {
-      this.peakScore = Math.max(this.peakScore, score)
-      if (now - this.lastDebugReportAt >= DEBUG_REPORT_MS) {
-        this.lastDebugReportAt = now
-        console.info(
-          `[nota wake word] peak score ${this.peakScore.toFixed(3)} ` +
-            `(fires at ${this.threshold}) | mic peak ${this.peakLevel}/32767` +
-            ` | mel peak ${this.melPeak.toFixed(2)}` +
-            ` | embedding spread ${this.embeddingSpread.toFixed(3)}`,
-        )
-        this.peakScore = 0
-        this.peakLevel = 0
-        this.melPeak = 0
-        this.lastMelPeak = 0
-        this.embeddingSpread = 0
-      }
-    }
 
     if (score >= this.threshold && now - this.lastDetectionAt >= REFRACTORY_MS) {
       this.lastDetectionAt = now

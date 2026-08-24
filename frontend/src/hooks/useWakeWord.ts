@@ -10,7 +10,7 @@ import { WakeWordEngine } from '../lib/wakeWordEngine'
 const MELSPECTROGRAM_PATH = '/oww/melspectrogram.onnx'
 const EMBEDDING_PATH = '/oww/embedding_model.onnx'
 const DEFAULT_KEYWORD_PATH = '/oww/hey_nota.onnx'
-const DEFAULT_THRESHOLD = 0.5
+const DEFAULT_THRESHOLD = 0.3
 
 function resolveKeywordPath(): string {
   const configured = import.meta.env.VITE_WAKE_WORD_MODEL as string | undefined
