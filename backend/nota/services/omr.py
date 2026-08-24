@@ -24,9 +24,12 @@ where one was expected. `OMRNotConfigured` covers the first case;
 
 from __future__ import annotations
 
+import logging
 import os
 import subprocess
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 # OMR on a real page is CPU-heavy; this default gives Audiveris room to
 # finish a modest multi-page score without the request hanging forever if
@@ -163,8 +166,21 @@ def convert_pdf_to_musicxml(
         raise OMRConversionFailed(f"Could not run Audiveris: {exc}") from exc
 
     if result.returncode != 0:
+        # The full output goes to the log, where there is room for a Java
+        # stack trace: when Audiveris fails for an environmental reason
+        # rather than because of the file, the cause is usually well above
+        # the end of the output, buried under suppressed exceptions and
+        # classpath dumps. The exception message keeps only a short tail,
+        # since it is stored per job and surfaced to callers.
+        logger.error(
+            "Audiveris exited with status %s for %s\nstdout:\n%s\nstderr:\n%s",
+            result.returncode,
+            pdf_path.name,
+            result.stdout,
+            result.stderr,
+        )
         detail = (result.stderr or result.stdout or "").strip().splitlines()
-        tail = " | ".join(detail[-5:]) if detail else "no output"
+        tail = " | ".join(line[:300] for line in detail[-8:]) if detail else "no output"
         raise OMRConversionFailed(
             f"Audiveris exited with status {result.returncode}: {tail}"
         )

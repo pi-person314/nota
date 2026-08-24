@@ -108,3 +108,31 @@ def test_frontend_dist_dir_unset_behaves_as_before(client):
 
     resp = client.get("/")
     assert resp.status_code == 404
+
+
+def test_missing_asset_file_is_404_not_index_html(spa_client):
+    """A request for a file that isn't there must fail as a 404 rather
+    than fall through to the SPA shell. Returning index.html would hand
+    back a web page wherever a real file was expected, which fails at the
+    point of use (a script or model file that parses as HTML) instead of
+    at the request.
+    """
+    resp = spa_client.get("/oww/not-a-real-model.onnx")
+
+    assert resp.status_code == 404
+    # Flask's own 404 page is HTML too, so the meaningful check is that
+    # this is not the SPA shell being served in a missing file's place.
+    assert b"spa shell" not in resp.data
+
+
+def test_missing_nested_asset_is_404(spa_client):
+    resp = spa_client.get("/assets/missing-chunk-abc123.js")
+    assert resp.status_code == 404
+
+
+def test_client_route_containing_a_dot_free_segment_still_falls_back(spa_client):
+    # Client-side routes carry no file extension, so they must keep
+    # resolving to the SPA shell even after the 404 rule above.
+    resp = spa_client.get("/score/9f8e7d6c5b4a")
+    assert resp.status_code == 200
+    assert b"spa shell" in resp.data

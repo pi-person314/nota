@@ -23,6 +23,10 @@ dist-ssr
 *.sln
 *.sw?
 
-# openWakeWord model files (CC BY-NC-SA / trained locally) — not checked in,
-# same treatment the old Porcupine .ppn/.pv files got.
-public/oww/
+# openWakeWord model files. The shared feature-extraction models are
+# third-party (CC BY-NC-SA), so they are fetched at image build time rather
+# than redistributed here — see the Dockerfile. hey_nota.onnx is our own
+# trained model, and is checked in so a deployment built from a clone of
+# this repo has a wake word at all.
+public/oww/*
+!public/oww/hey_nota.onnx

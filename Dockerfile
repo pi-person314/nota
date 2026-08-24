@@ -10,7 +10,22 @@ COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 
 COPY frontend/ ./
-RUN npm run build
+
+# The shared openWakeWord feature-extraction models are third-party and
+# deliberately not committed (see frontend/.gitignore), so fetch them into
+# the public directory for Vite to copy into dist alongside the checked-in
+# wake-word model.
+ARG OPENWAKEWORD_VERSION=v0.5.1
+ADD https://github.com/dscripka/openWakeWord/releases/download/${OPENWAKEWORD_VERSION}/melspectrogram.onnx public/oww/melspectrogram.onnx
+ADD https://github.com/dscripka/openWakeWord/releases/download/${OPENWAKEWORD_VERSION}/embedding_model.onnx public/oww/embedding_model.onnx
+
+# All three models have to reach dist or the wake word cannot load at
+# runtime. Checking here fails the build instead of shipping an image whose
+# only symptom is the browser reporting the models as missing.
+RUN npm run build \
+    && test -s dist/oww/hey_nota.onnx \
+    && test -s dist/oww/melspectrogram.onnx \
+    && test -s dist/oww/embedding_model.onnx
 
 # --- Stage 2: backend runtime -------------------------------------------
 FROM python:3.13-slim AS backend
@@ -53,12 +68,23 @@ ADD https://github.com/Audiveris/audiveris/releases/download/${AUDIVERIS_VERSION
 # actually gate the build — a genuinely missing or broken Audiveris fails
 # here rather than becoming a server that quietly reports PDF import as
 # unconfigured at runtime.
+#
+# GTK is installed alongside it because Audiveris reaches for libgtk-3
+# through JNA even on a batch run, and a slim Python image carries no
+# desktop libraries at all. Debian renamed this package with a "t64"
+# suffix during the 64-bit time_t transition, so both names are tried.
 RUN mkdir -p /usr/share/applications /usr/local/share/applications /usr/share/desktop-directories \
     && apt-get update \
     && { apt-get install -y --no-install-recommends /tmp/audiveris.deb || true; } \
+    && { apt-get install -y --no-install-recommends libgtk-3-0t64 \
+         || apt-get install -y --no-install-recommends libgtk-3-0; } \
     && rm /tmp/audiveris.deb \
     && rm -rf /var/lib/apt/lists/* \
     && test -x /opt/audiveris/bin/Audiveris
+
+# No display exists here, so tell the JVM up front rather than letting AWT
+# discover it by failing to load a native desktop library mid-conversion.
+ENV JAVA_TOOL_OPTIONS=-Djava.awt.headless=true
 ENV AUDIVERIS_PATH=/opt/audiveris/bin/Audiveris
 
 # Audiveris ships no OCR language data; interactively it offers a download

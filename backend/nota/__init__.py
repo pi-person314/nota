@@ -143,6 +143,15 @@ def _register_spa(app: Flask, dist_dir: str) -> None:
                 # doesn't land on an existing regular file.
                 response = send_from_directory(dist_dir, path)
             except NotFound:
+                # A path naming a file that isn't there is a genuine 404.
+                # Falling through to index.html would answer a request for
+                # a missing asset with a web page, which then fails much
+                # more confusingly wherever it is actually used — a script
+                # or model file that parses as HTML. Client-side routes
+                # (/dashboard, /reset-password) carry no extension, so they
+                # still fall through as intended.
+                if "." in path.rsplit("/", 1)[-1]:
+                    abort(404)
                 response = None
             if response is not None:
                 if path.startswith("assets/"):

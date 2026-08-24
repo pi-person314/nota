@@ -38,6 +38,16 @@ export function UploadDropzone({ large = false, headline = 'Drop a score here' }
   const activeConversion = useScoreStore((s) =>
     s.conversions.find((c) => c.status === 'queued' || c.status === 'running'),
   )
+  // Counted rather than collected into an array: a selector returning a
+  // fresh array on every call would give the store a new snapshot each
+  // render. "queued" is simply the status a job starts in, so it only
+  // means "waiting behind something" when another conversion exists.
+  const activeCount = useScoreStore((s) =>
+    s.conversions.reduce(
+      (n, c) => (c.status === 'queued' || c.status === 'running' ? n + 1 : n),
+      0,
+    ),
+  )
 
   const [dragOver, setDragOver] = useState(false)
   const [uploading, setUploading] = useState<string | null>(null)
@@ -116,8 +126,8 @@ export function UploadDropzone({ large = false, headline = 'Drop a score here' }
         <>
           <div className="text-sm font-medium">{activeConversion.filename}</div>
           <div className="text-xs text-faint">
-            {activeConversion.status === 'queued'
-              ? "Queued behind another conversion — converting PDF to notation (beta) once it's your turn…"
+            {activeConversion.status === 'queued' && activeCount > 1
+              ? "Queued behind another conversion — this one starts once that finishes…"
               : 'Converting PDF to notation (beta) — this can take a minute…'}
           </div>
           <div className="upload-hairline w-40" />

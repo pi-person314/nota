@@ -173,6 +173,13 @@ def _execute(job_id: str, pdf_path: Path) -> None:
         )
         return
     except omr.OMRConversionFailed as exc:
+        # Logged as well as stored on the job: the message carries the tail
+        # of Audiveris's own output, which is the only real diagnostic when
+        # conversion fails for an environmental reason (missing OCR data,
+        # too little memory) rather than because of the file itself. The
+        # user-facing side of this deliberately shows friendlier wording,
+        # so without this the detail would exist only in the database.
+        logger.error("Conversion job %s failed during OMR: %s", job_id, exc)
         _finish_job(job_id, status="failed", error_code="OMR_FAILED", error_message=str(exc))
         return
 
