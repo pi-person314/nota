@@ -104,9 +104,16 @@ export class WakeWordEngine {
   // keyword pass.
   private embeddings: Float32Array[] = []
   private lastDetectionAt = 0
+  // Serializes chunk processing; see `onmessage`.
+  private drainTail: Promise<void> = Promise.resolve()
+  // Bumped by reset() so an in-flight drain can notice it is now stale.
+  private generation = 0
   private readonly debug = debugEnabled()
   private peakScore = 0
   private peakLevel = 0
+  private melPeak = 0
+  private lastMelPeak = 0
+  private embeddingSpread = 0
   private lastDebugReportAt = 0
 
   private constructor(
@@ -178,6 +185,9 @@ export class WakeWordEngine {
     this.melFrames = []
     this.embeddings = []
     this.lastDetectionAt = 0
+    // Signals any drain still in flight that its remaining work belongs to
+    // audio this reset just discarded.
+    this.generation += 1
   }
 
   async release(): Promise<void> {
@@ -187,14 +197,37 @@ export class WakeWordEngine {
   // `PvEngine` entry point: WebVoiceProcessor calls this with a
   // `{command: 'process', inputFrame}` payload for every downsampled audio
   // frame (Int16Array PCM at 16kHz, 512 samples by default).
-  onmessage = async (event: MessageEvent<{ command?: string; inputFrame?: Int16Array }>): Promise<void> => {
+  onmessage = (event: MessageEvent<{ command?: string; inputFrame?: Int16Array }>): void => {
     if (event.data?.command !== 'process' || !event.data.inputFrame) return
 
+    // Buffering the frame is synchronous, so samples are always stored in
+    // arrival order no matter how the draining below gets scheduled.
     for (let i = 0; i < event.data.inputFrame.length; i++) {
       this.pendingSamples.push(event.data.inputFrame[i])
     }
 
+    // Draining is chained onto whatever drain is already in flight rather
+    // than started immediately. WebVoiceProcessor delivers a frame every
+    // ~32ms and does not wait for this handler to finish, so an inference
+    // pass slower than that would otherwise have two drains running at
+    // once, both appending to the shared mel/embedding buffers. The
+    // individual frames would still be well formed, but their order would
+    // not be -- and a wake word is a pattern over time, so out-of-order
+    // embeddings simply stop matching.
+    this.drainTail = this.drainTail
+      .then(() => this.drain())
+      .catch((error) => {
+        console.error('[nota wake word] audio processing failed', error)
+      })
+  }
+
+  private async drain(): Promise<void> {
+    const generation = this.generation
     while (this.pendingSamples.length >= SAMPLES_PER_CHUNK) {
+      // A reset between chunks (listening restarted) invalidates whatever
+      // is still queued here, so this drain stops rather than feeding the
+      // models audio from before the reset.
+      if (generation !== this.generation) return
       const chunk = this.pendingSamples.splice(0, SAMPLES_PER_CHUNK)
       await this.processChunk(chunk)
     }
@@ -233,6 +266,11 @@ export class WakeWordEngine {
         frame[b] = data[f * bins + b] / 10 + 2
       }
       this.melFrames.push(frame)
+      if (this.debug) {
+        for (const v of frame) {
+          if (v > this.lastMelPeak) this.lastMelPeak = v
+        }
+      }
     }
 
     while (this.melFrames.length >= this.embeddingWindow) {
@@ -249,6 +287,22 @@ export class WakeWordEngine {
     const result = await this.embeddingSession.run({ [this.embeddingInputName]: input })
     const embedding = Float32Array.from(result[this.embeddingOutputName].data as Float32Array)
     this.embeddings.push(embedding)
+
+    if (this.debug) {
+      // Spread of the embedding vector, tracked so a dead score can be
+      // traced to the stage that produced it. Loud audio that yields a
+      // flat embedding means the melspectrogram or embedding stage is at
+      // fault; a varying embedding that still scores zero points at the
+      // wake-word model itself.
+      let min = Infinity
+      let max = -Infinity
+      for (const v of embedding) {
+        if (v < min) min = v
+        if (v > max) max = v
+      }
+      this.embeddingSpread = Math.max(this.embeddingSpread, max - min)
+      this.melPeak = Math.max(this.melPeak, this.lastMelPeak)
+    }
 
     this.melFrames.splice(0, EMBEDDING_STRIDE)
 
@@ -278,10 +332,15 @@ export class WakeWordEngine {
         this.lastDebugReportAt = now
         console.info(
           `[nota wake word] peak score ${this.peakScore.toFixed(3)} ` +
-            `(fires at ${this.threshold}) | mic peak ${this.peakLevel}/32767`,
+            `(fires at ${this.threshold}) | mic peak ${this.peakLevel}/32767` +
+            ` | mel peak ${this.melPeak.toFixed(2)}` +
+            ` | embedding spread ${this.embeddingSpread.toFixed(3)}`,
         )
         this.peakScore = 0
         this.peakLevel = 0
+        this.melPeak = 0
+        this.lastMelPeak = 0
+        this.embeddingSpread = 0
       }
     }
 
